@@ -1,0 +1,61 @@
+services:
+  app:
+    image: golang:1.26.4
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: sh -lc "go mod download && go run ./..."
+    environment:
+      WIREMOCK_URL: http://wiremock:8080
+    depends_on:
+      - wiremock
+      - sql
+      - grafana
+
+  wiremock:
+    image: wiremock/wiremock:3.9.2
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./mocks:/home/wiremock
+    command: --verbose --root-dir /home/wiremock
+
+  jmeter:
+    image: justb4/jmeter:5.6.3
+    working_dir: /scripts
+    volumes:
+      - ./jmeter:/scripts
+    entrypoint: ["sh", "-lc", "tail -f /dev/null"]
+    depends_on:
+      - app
+
+  sql:
+    image: postgres:17 # Pinning a specific version is highly recommended
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db:/var/lib/postgresql/data
+  otel:
+    image: otel/opentelemetry-collector-contrib:0.90.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+  
+  grafana:
+    image: grafana/grafana:11.6
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - otel

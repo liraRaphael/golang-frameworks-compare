@@ -2,70 +2,72 @@
 
 **Status**: Aceito
 
-**Data**: 2026-06-26
+**Data**: 2026-06-24
 
-**Tags**: [roteamento, router, response, status code, swagger, openapi]
+**Tags**: [roteamento, router, response, status code, swagger, openapi, pprof]
 
 ## Pré-requisito
 - [ADR-001: Estrutura da aplicação](001-estrutura-app.md)
 - [ADR-003: Handler](003-handler.md)
 
 ## Contexto
-Tendo como base a ideia de testar *N* frameworks web do Go, é necessário definir um roteamento que seja capaz de lidar com diferentes tipos de requisições e respostas, além de permitir a integração com ferramentas de documentação como *Swagger* e *OpenAPI* e *pprof*. O roteamento deve ser configurável, permitindo a definição de parâmetros como métodos HTTP, paths, middlewares e handlers (pré estruturado na *ADR-001*).
+Como o projeto compara vários frameworks web em Go, o roteamento precisa ser abstraído para que as rotas e os comportamentos sejam consistentes independentemente do framework escolhido. Além disso, é importante garantir documentação automática, observabilidade e isolamento de infraestrutura.
 
 ## Decisão
-Sabendo-se que a ideia dessa ferramenta é o comparativo de frameworks web do Go, a decisão é criar um pacote `router` dentro da camada `adapter`, que será responsável por lidar com o roteamento da aplicação. Este pacote deve fornecer funções para mapear rotas para handlers apropriados, bem como para logar informações relevantes para monitoramento e depuração sem que haja diferença entre os frameworks. Assim, o roteamento deve ser capaz de lidar com diferentes tipos de requisições e respostas, permitindo a integração com ferramentas de documentação como *Swagger* e *OpenAPI* e *pprof*. Além disso, o roteamento deve ser configurável, permitindo a definição de parâmetros como métodos HTTP, paths, middlewares e handlers (pré estruturado na *ADR-001*).
-- Fazendo o uso de composição e desing partner *Factory*, será criado um *Router* genérico que receberá como parâmetro o *framework* a ser utilizado, e a partir disso, será possível criar rotas específicas para cada framework, sem que haja diferença entre eles. 
-- O *Router* genérico será responsável por ter um método de cada tipo de método HTTP.
-  - Deverá ter um método para cada tipo de método HTTP (GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD) que receba como parâmetro o *path* da rota e o *handler* correspondente, permitindo que diferentes tipos de requisições sejam tratados de forma uniforme.
-  - Deverá ter um método para adicionar *middlewares* que receba como parâmetro o *middleware* correspondente, permitindo que diferentes tipos de requisições sejam tratados de forma uniforme.
-  - Deverá ter a opção de devolver um status code padrão para cada rota, sem o padrão *200 OK* com exceção do *POST* que deverá devolver *201 Created*.
-  - Ter a opção de *tipo de request e response* usando *generics* (se possível)
-  - Poder de ter a opção de adicionar *Swagger* e *OpenAPI* para cada rota, permitindo que diferentes tipos de requisições sejam tratados de forma uniforme.
-    - Com isso, cadastrar os `errors` e usar o *handler* correspondente para gerar os exemplos, adicionando automaticamente a documentação *swagger* e *openapi*.
-  - Quando possível, use *ponteiros* para não precisar ficar copiando structs de request e response, mas apenas referenciando-as.
-- Deverá ser criado com o partner *Builder* um *RouterBuilder* que será responsável por construir o *Router* genérico, recebendo como parâmetro o *framework* a ser utilizado, e a partir disso, será possível criar rotas específicas para cada framework, sem que haja diferença entre eles.
-  - É necessário criar uma interface em `infrastructure/framework` que defina os métodos necessários para criar rotas específicas para cada framework, permitindo que a aplicação utilize diferentes frameworks conforme necessário, fazendo um de para entre eles, além de um *start* para inicializar o framework.
-  - Cada *framework* deverá ter sua própria implementação dessa interface, encapsulando a lógica de criação de rotas específicas para cada framework, permitindo que a aplicação utilize diferentes frameworks conforme necessário.
-  - Cada *framework* deverá ter as suas proprias configurações em `infrastructure/config`, encapsulando a lógica de configuração específica para cada framework, permitindo que a aplicação utilize diferentes frameworks conforme necessário.
-- Crie o *pprof* em um *server* separado (e nativo), para não atrapalhar o fluxo principal da aplicação, e que seja possível habilitar ou desabilitar o *pprof* conforme necessário.
-  - por padrão na porta 8081, mas que seja possível alterar a porta conforme necessário (config).
-  - o *pprof* deverá ser configurado para permitir a análise de desempenho da aplicação, permitindo que diferentes tipos de requisições sejam tratados de forma uniforme.
-  - deverá ficar no pacote `infrastructure/pprof`, encapsulando a lógica de configuração específica para o *pprof*, permitindo que a aplicação utilize diferentes frameworks conforme necessário.
-- Crie a rota de *swagger* e *openapi* em um *server* separado (e nativo), para não atrapalhar o fluxo principal da aplicação, e que seja possível habilitar ou desabilitar o *swagger* e *openapi* conforme necessário.
-  - por padrão na porta 8082, mas que seja possível alterar a porta conforme necessário (config).
-  - as rotas de *swagger* e *openapi* deverão ser geradas automaticamente a partir das rotas cadastradas no *Router*, permitindo que a documentação esteja sempre atualizada com as rotas disponíveis na aplicação.
-  - deverá ficar no pacote `infrastructure/docs/swagger`, encapsulando a lógica de configuração específica para o *swagger* e *openapi*, permitindo que a aplicação utilize diferentes frameworks conforme necessário.
-  - use a lib `github.com/swaggest/openapi-go` para gerar a documentação *swagger* e *openapi* automaticamente a partir das rotas cadastradas no *Router*, permitindo que a documentação esteja sempre atualizada com as rotas disponíveis na aplicação.
-    - Use as tags de field como as descritas em: 
-      - [These tags can be used](https://github.com/swaggest/jsonschema-go#field-tags):
-        * [`title`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.6.1), string
-        * [`description`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.6.1), string
-        * [`default`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.6.2), can be scalar or JSON value
-        * [`example`](https://json-schema.org/draft/2020-12/json-schema-validation.html#name-examples), a scalar value that matches type of parent property, for an array it is applied to items
-        * [`examples`](https://json-schema.org/draft/2020-12/json-schema-validation.html#name-examples), a JSON array value
-        * [`const`](https://json-schema.org/draft/2020-12/json-schema-validation.html#rfc.section.6.1.3), can be scalar or JSON value
-        * [`deprecated`](https://json-schema.org/draft/2020-12/json-schema-validation#name-deprecated), boolean
-        * [`readOnly`](https://json-schema.org/draft/2020-12/json-schema-validation#name-deprecated), boolean
-        * [`writeOnly`](https://json-schema.org/draft/2020-12/json-schema-validation#name-deprecated), boolean
-        * [`pattern`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.2.3), string
-        * [`format`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.7), string
-        * [`multipleOf`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.1.1), float > 0
-        * [`maximum`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.1.2), float
-        * [`minimum`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.1.3), float
-        * [`maxLength`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.2.1), integer
-        * [`minLength`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.2.2), integer
-        * [`maxItems`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.3.2), integer
-        * [`minItems`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.3.3), integer
-        * [`maxProperties`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.4.1), integer
-        * [`minProperties`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.4.2), integer
-        * [`exclusiveMaximum`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.1.2), boolean
-        * [`exclusiveMinimum`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.1.3), boolean
-        * [`uniqueItems`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.3.4), boolean
-        * [`enum`](https://json-schema.org/draft-04/json-schema-validation.html#rfc.section.5.5.1), tag value must be a JSON or comma-separated list of strings
-        * `required`, boolean, marks property as required
-        * `nullable`, boolean, overrides nullability of the property
+Será criado um componente de roteamento abstrato em `adapter` que permita registrar rotas, middlewares e handlers de forma uniforme, independentemente do framework concreto usado em `infra`.
 
+### Objetivos
+- Permitir que a mesma definição de rota funcione em Gin, Echo, Fiber, Chi ou outro framework.
+- Centralizar regras de status code, middlewares e mapeamento de resposta.
+- Habilitar documentação automática via OpenAPI/Swagger.
+- Expor endpoints de diagnóstico como `pprof` em um servidor separado.
+
+### Componente de roteamento
+- O componente será implementado por meio de um `Router` genérico e de um `RouterBuilder`.
+- O roteamento deve usar composição e o padrão Factory para abstrair a implementação concreta do framework.
+- A ideia é que o `RouterBuilder` monte um `Router` com comportamento comum, enquanto cada framework em `infra/frameworks` fornece a adaptação específica para registrar rotas e middlewares.
+- Cada rota deve aceitar método HTTP, path, handler, middlewares e metadata de documentação.
+- O padrão deve prever status code padrão por método, com `POST` usando `201 Created` e demais métodos usando `200 OK` por padrão.
+
+### Interface genérica para frameworks
+A interface genérica deverá ficar em `infra/frameworks` e deverá obedecer ao fluxo do handler, garantindo que o framework receba uma função de execução compatível com a resposta padronizada.
+
+```go
+type FrameworkAdapter interface {
+    RegisterRoute(method string, path string, handler func(ctx context.Context, req any) (any, error)) error
+    Use(middleware func(ctx context.Context, req any) (any, error))
+    Start(addr string) error
+}
+
+type Router interface {
+    AddRoute(method string, path string, handler func(ctx context.Context, req any) (any, error)) error
+    AddMiddleware(middleware func(ctx context.Context, req any) (any, error))
+}
+
+type RouterBuilder interface {
+    SetFramework(adapter FrameworkAdapter) RouterBuilder
+    Build() Router
+}
+```
+
+### Integração com frameworks
+- Cada framework terá uma implementação concreta na camada `infra`.
+- A interface de adaptação do framework deve expor métodos para registrar rota, iniciar o servidor e configurar middlewares.
+- O Builder deverá receber um adaptador concreto e construir o `Router` com comportamento uniforme entre os frameworks comparados.
+
+### Documentação
+- A documentação OpenAPI/Swagger deverá ser gerada automaticamente a partir das rotas cadastradas.
+- A configuração de documentação ficará em `infra/docs/swagger`.
+- A geração deve aproveitar os metadados de rotas e os tipos de request/response.
+
+### Observabilidade e diagnóstico
+- O `pprof` deverá ficar em um servidor separado, por padrão na porta `8081`, configurável via `infra/config`.
+- O Swagger/OpenAPI poderá ficar em um servidor separado, por padrão na porta `8082`, também configurável.
+
+## Consequências
+- O mesmo conjunto de rotas pode ser usado para comparar o comportamento dos frameworks sem reescrever o contrato da aplicação.
+- A documentação fica mais fácil de manter e sempre sincronizada com as rotas implementadas.
+- A infraestrutura de diagnóstico fica isolada do fluxo principal da API.
 
 ## Referências
 1. https://pkg.go.dev/github.com/swaggest/openapi-go#section-readme

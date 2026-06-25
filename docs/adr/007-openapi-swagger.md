@@ -44,6 +44,9 @@ Para cada campo, o projeto deverá usar tags de schema que descrevam o contrato 
 - O `adapter` deve fornecer a descrição operacional da rota, como summary e tags.
 - Os erros devem ter representação clara no schema para facilitar a documentação e o consumo por clientes.
 
+### Interface
+Use a lib https://github.com/swaggo/swag/blob/master/example/basic/main.go
+
 ## Consequências
 - A documentação fica sincronizada com o código.
 - A manutenção do contrato da API se torna mais simples.

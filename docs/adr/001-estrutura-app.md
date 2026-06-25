@@ -41,6 +41,9 @@ A aplicação será organizada em três camadas principais:
 - `api/infra/config/...`
 - `api/infra/clients/...`
 - `api/infra/observability/...`
+- `api/infra/frameworks/gin/...`
+- `api/infra/frameworks/fiber/...`
+- `api/infra/frameworks/echo/...`
 
 ### Responsabilidades por camada
 #### Core
@@ -58,6 +61,7 @@ A aplicação será organizada em três camadas principais:
 - Implementar as interfaces definidas em `core`.
 - Lidar com banco de dados, configuração, clientes externos, tracing, métricas, routers e documentação.
 - Garantir que a escolha de framework ou biblioteca não vaze para o domínio.
+- Manter cada implementação concreta de framework em um subdiretório isolado, por exemplo `api/infra/frameworks/gin` e `api/infra/frameworks/fiber`, para evitar que uma integração contamine a outra.
 
 ### Padrões recomendados
 - Interfaces pequenas e específicas.
@@ -77,6 +81,9 @@ A aplicação será organizada em três camadas principais:
 - [ADR-007: Geração automática de documentação OpenAPI/Swagger](007-openapi-swagger.md)
 - [ADR-008: Pprof e diagnóstico de performance](008-pprof.md)
 - [ADR-009: Padrões de Request, Response e HttpParam no Core](009-request-response-core.md)
+- [ADR-010: Injeção de Dependência (DI)](010-injecao-dependencia.md)
+- [ADR-011: Gestão de Configuração](011-gestao-configuracao.md)
+- [ADR-012: Automação via CI/CD (GitHub Actions)](012-automacao-cicd.md)
 
 ## Referências
 1. [Clean Architecture](https://dev.to/yuripeixinho/clean-architecture-arquitetura-limpa-33e1)

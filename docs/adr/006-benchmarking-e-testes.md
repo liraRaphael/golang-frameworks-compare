@@ -35,6 +35,12 @@ A estratégia de validação do projeto será composta por três camadas:
 - Medir latência, throughput, uso de CPU, memória e erro por requisição.
 - Rodar os testes em containers Docker para reduzir variação de ambiente.
 
+### Isolamento de ambiente
+- Para que os resultados entre frameworks sejam comparáveis, o ambiente de execução deve ser fixado e controlado.
+- O benchmark deve rodar com limites explícitos de CPU e memória no Docker, por exemplo `cpus: "1.0"` e `mem_limit: "512m"`, para reduzir a interferência do sistema operacional.
+- O mesmo conjunto de recursos e restrições deve ser aplicado a todos os frameworks comparados, evitando variações causadas por conteúdo concorrente no host.
+- O ambiente deve registrar, ao menos, a versão do kernel, a quantidade de CPU disponível e a configuração do container utilizado na execução.
+
 ### Cenários mínimos
 - Hello World
 - Conversor de Moedas

@@ -23,37 +23,62 @@ Será criado um componente de roteamento abstrato em `adapter` que permita regis
 - Expor endpoints de diagnóstico como `pprof` em um servidor separado.
 
 ### Componente de roteamento
-- O componente será implementado por meio de um `Router` genérico e de um `RouterBuilder`.
-- O roteamento deve usar composição e o padrão Factory para abstrair a implementação concreta do framework.
-- A ideia é que o `RouterBuilder` monte um `Router` com comportamento comum, enquanto cada framework em `infra/frameworks` fornece a adaptação específica para registrar rotas e middlewares.
+- O componente será implementado por meio de um `Router` abstrato, de um `RouterBuilder` e de um conjunto de `FrameworkAdapter`.
+- O padrão Strategy será usado para encapsular a implementação específica de cada framework, de modo que o restante da aplicação não dependa de Gin, Fiber, Echo ou qualquer outro runtime HTTP concreto.
+- O padrão Builder será usado para configurar a instância do roteador, permitindo adicionar middlewares globais, setup de observabilidade, rotas de health check e demais inicializações comuns.
 - Cada rota deve aceitar método HTTP, path, handler, middlewares e metadata de documentação.
 - O padrão deve prever status code padrão por método, com `POST` usando `201 Created` e demais métodos usando `200 OK` por padrão.
 
-### Interface genérica para frameworks
-A interface genérica deverá ficar em `infra/frameworks` e deverá obedecer ao fluxo do handler, garantindo que o framework receba uma função de execução compatível com a resposta padronizada.
+### Contratos de interface
+#### Adapter / Core
+A interface de roteamento consumida pelo restante da aplicação ficará na camada `adapter`, com um contrato simples e independente de framework.
 
 ```go
-type FrameworkAdapter interface {
-    RegisterRoute(method string, path string, handler func(ctx context.Context, req any) (any, error)) error
-    Use(middleware func(ctx context.Context, req any) (any, error))
+// api/adapter/router/router.go
+package router
+
+import "context"
+
+type HandlerFunc func(ctx context.Context, req any) (any, error)
+
+type Router interface {
+    AddRoute(method string, path string, handler HandlerFunc, meta RouteMetadata)
+    Use(middleware HandlerFunc)
     Start(addr string) error
 }
 
-type Router interface {
-    AddRoute(method string, path string, handler func(ctx context.Context, req any) (any, error)) error
-    AddMiddleware(middleware func(ctx context.Context, req any) (any, error))
-}
-
-type RouterBuilder interface {
-    SetFramework(adapter FrameworkAdapter) RouterBuilder
-    Build() Router
+type RouteMetadata struct {
+    Summary     string
+    Description string
+    Tags        []string
 }
 ```
 
-### Integração com frameworks
-- Cada framework terá uma implementação concreta na camada `infra`.
-- A interface de adaptação do framework deve expor métodos para registrar rota, iniciar o servidor e configurar middlewares.
-- O Builder deverá receber um adaptador concreto e construir o `Router` com comportamento uniforme entre os frameworks comparados.
+#### Infra / Frameworks
+A interface que cada framework concreto deve implementar ficará em `infra/frameworks` e atuará como a ponte entre o mundo do framework e o contrato padrão do projeto.
+
+```go
+// api/infra/frameworks/adapter.go
+package frameworks
+
+import "seu-projeto/api/adapter/router"
+
+type FrameworkAdapter interface {
+    RegisterRoute(method string, path string, handler router.HandlerFunc)
+    Use(middleware router.HandlerFunc)
+    Start(addr string) error
+}
+```
+
+### Wrapper de framework
+- A implementação concreta de `FrameworkAdapter` deve ser extremamente leve e atuar apenas como um tradutor entre o ciclo de vida do framework e o contrato padrão do `Router`.
+- Ela deve lidar com a conversão de `context.Context`, payloads de request/response e eventos de execução do framework, sem conter lógica de negócio, regras de domínio ou persistência.
+- Cada framework terá um subdiretório próprio em `infra/frameworks/<framework>` para isolar a integração e preservar a compatibilidade com as diferenças de implementação entre Gin, Fiber, Echo e outros.
+
+### Fluxo de construção
+- O `RouterBuilder` receberá um `FrameworkAdapter` e montará um `standardRouter` com comportamento uniforme entre os frameworks comparados.
+- O `main.go` ou o bootstrap da aplicação passará apenas a escolha do framework e a construção do roteador, sem necessidade de reescrever a lógica de endpoints.
+- Em testes de integração, um `MockAdapter` pode ser injetado para validar registro de rotas, middlewares e inicialização sem subir um servidor HTTP real.
 
 ### Documentação
 - A documentação OpenAPI/Swagger deverá ser gerada automaticamente a partir das rotas cadastradas.

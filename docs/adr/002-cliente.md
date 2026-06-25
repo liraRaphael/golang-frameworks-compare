@@ -24,6 +24,8 @@ Será criado um contrato de cliente na camada `core` e sua implementação concr
 - `infra/clients/http` para chamadas HTTP usando `net/http` ou `fasthttp`.
 - `infra/clients/grpc` para chamadas gRPC, se necessário no futuro.
 - Cada implementação deve assumir a responsabilidade de serialização, configuração e tratamento de transporte, sem expor detalhes do framework para o domínio.
+- a alteração entre grpc ou http não deverá ser sentido
+- para http será testados os cenários com http1.1 e http2c
 
 ### Erros
 - Erros de comunicação devem ser representados por tipos específicos em `core/domain/errors`.

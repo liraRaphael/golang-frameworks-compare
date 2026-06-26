@@ -21,7 +21,8 @@ A implementação inicial utilizará a biblioteca padrão `encoding/json` para s
 ### Comportamento esperado
 - O handler receberá um `context.Context` e um `result any`.
 - Se `result` for um `error`, o handler identificará o tipo e/ou mensagem do erro e aplicará a estratégia adequada de mapeamento.
-- Se `result` não for um erro, o handler interpretará como sucesso e retornará a resposta padrão de sucesso definida pela rota.
+- Se `result` não for um erro, o handler interpretará como sucesso e retornará o payload de resposta já preparado pelo caso de uso ou presenter.
+- A implementação concreta do handler deve ser mantida em `adapter/handler` e consumida pela camada de infraestrutura por meio da interface `ports.Handler`.
 
 ### Resposta padrão
 A resposta padrão deve seguir o seguinte formato:
@@ -66,6 +67,8 @@ type Handler interface {
 }
 ```
 
+A interface permanece definida em `core/ports` para manter o contrato do domínio desacoplado do framework e da infraestrutura.
+
 ### Interface de estratégia
 ```go
 type ErrorHandlerStrategy interface {
@@ -79,6 +82,7 @@ type ErrorHandlerStrategy interface {
 - O handler deve registrar eventos de erro e sucesso com contexto de requisição.
 - Logs devem incluir identificador de requisição, status, código de erro, mensagem e detalhes relevantes.
 - O logging deve ser implementado por meio de abstração de observabilidade em `infra`.
+- A implementação concreta da observabilidade fica em `infra/observability` e deve ser injetada quando necessário.
 
 ### Integração com o framework
 - O handler não deve conhecer diretamente o framework escolhido.

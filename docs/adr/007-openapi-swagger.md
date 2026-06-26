@@ -41,6 +41,7 @@ Para cada campo, o projeto deverá usar tags de schema que descrevam o contrato 
 
 ### Regras de uso
 - Os tipos do `core` devem ser ricos em metadados para que a geração de documentação seja automática.
+- Os tipos de request/response devem incluir tags de schema (`title`, `description`, `example`, `default`, `deprecated`, `readOnly`, `writeOnly`, `pattern`, `format`, `enum`, `required`, `nullable`) sempre que aplicável.
 - O `adapter` deve fornecer a descrição operacional da rota, como summary e tags.
 - Os erros devem ter representação clara no schema para facilitar a documentação e o consumo por clientes.
 

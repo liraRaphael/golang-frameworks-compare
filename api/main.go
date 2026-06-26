@@ -27,7 +27,6 @@ func main() {
 	stdRouter := router.NewStandardRouter(nethttp)
 
 	stdRouter.AddRoute("GET", "/hello", helloWorldController)
-
 	stdRouter.AddRoute("GET", "/health", healthController)
 
 	log.Printf("server listening on :%s", cfg.Port)

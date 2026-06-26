@@ -24,38 +24,14 @@ Será criado um componente de roteamento abstrato em `adapter` que permita regis
 
 ### Componente de roteamento
 - O componente será implementado por meio de um `Router` abstrato, de um `RouterBuilder` e de um conjunto de `FrameworkAdapter`.
-- O padrão Strategy será usado para encapsular a implementação específica de cada framework, de modo que o restante da aplicação não dependa de Gin, Fiber, Echo ou qualquer outro runtime HTTP concreto.
-- O padrão Builder será usado para configurar a instância do roteador, permitindo adicionar middlewares globais, setup de observabilidade, rotas de health check e demais inicializações comuns.
+- Cada framework terá seu próprio inicializador em `infra/frameworks/<nome>`.
+- Uma função de registro de rotas (ex: `RegisterRoutes(router any, ...handlers)`) será responsável por definir os endpoints de forma agnóstica. O `adapter` de cada framework fará a conversão do `router any` para o tipo específico (`*gin.Engine`, `*fiber.App`).
 - Cada rota deve aceitar método HTTP, path, handler, middlewares e metadata de documentação.
 - O padrão deve prever status code padrão por método, com `POST` usando `201 Created` e demais métodos usando `200 OK` por padrão.
 
 ### Contratos de interface
-#### Adapter / Core
-A interface de roteamento consumida pelo restante da aplicação ficará na camada `adapter`, com um contrato simples e independente de framework.
-
-```go
-// api/adapter/router/router.go
-package router
-
-import "context"
-
-type HandlerFunc func(ctx context.Context, req any) (any, error)
-
-type Router interface {
-    AddRoute(method string, path string, handler HandlerFunc, meta RouteMetadata)
-    Use(middleware HandlerFunc)
-    Start(addr string) error
-}
-
-type RouteMetadata struct {
-    Summary     string
-    Description string
-    Tags        []string
-}
-```
-
 #### Infra / Frameworks
-A interface que cada framework concreto deve implementar ficará em `infra/frameworks` e atuará como a ponte entre o mundo do framework e o contrato padrão do projeto.
+A interface que cada `adapter` de framework deve implementar ficará em `infra/frameworks` e atuará como a ponte entre o mundo do framework e o contrato padrão do projeto. O objetivo é adaptar uma requisição do framework para o `Request` do domínio e converter o `Response` do domínio para a resposta do framework.
 
 ```go
 // api/infra/frameworks/adapter.go
@@ -63,9 +39,9 @@ package frameworks
 
 import "seu-projeto/api/adapter/router"
 
-type FrameworkAdapter interface {
-    RegisterRoute(method string, path string, handler router.HandlerFunc)
-    Use(middleware router.HandlerFunc)
+// FrameworkAdapter é um exemplo de como um handler de framework (ex: gin.HandlerFunc)
+// pode ser criado para envolver um controller do domínio.
+type FrameworkAdapter func(controller YourControllerInterface) FrameworkHandler
     Start(addr string) error
 }
 ```

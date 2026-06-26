@@ -21,7 +21,7 @@ type HttpParam interface {
 	Clear()
 }
 
-type mapHttpParam struct {
+type MapHttpParam struct {
 	values map[string][]string
 }
 

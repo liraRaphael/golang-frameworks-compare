@@ -21,10 +21,10 @@ A estrutura base de request deverá ser:
 
 ```go
 type Request[BodyType any] struct {
-    Body       BodyType
-    Headers    HttpParam
+    Body        BodyType
+    Headers     map[string][]string
     QueryParams HttpParam
-    PathParams HttpParam
+    PathParams  map[string]string
 }
 ```
 

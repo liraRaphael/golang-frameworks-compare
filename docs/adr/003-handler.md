@@ -45,7 +45,7 @@ A resposta padrão deve seguir o seguinte formato:
 
 ### Estratégia de mapeamento
 - O handler usará o padrão Strategy para escolher como mapear um erro para uma resposta.
-- A função de mapeamento será definida como um tipo em `core/domain/enums` ou `core/ports` com a assinatura `ErrorResponseFuncType`.
+- A função de mapeamento será definida como um tipo em `core/ports` com a assinatura `ErrorResponseFuncType`.
 - O contrato da função anônima será:
 
 ```go

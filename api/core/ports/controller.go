@@ -8,16 +8,16 @@ import (
 )
 
 type (
-	Controller interface {
-		WrapperExecute(ctx context.Context, req requests.Request[any]) (any, error)
+	Controller[BodyType any, ParamType any] interface {
+		WrapperExecute(ctx context.Context, req requests.Request[any, any]) (any, error)
 	}
 
 	HelloController interface {
-		Controller
+		Controller[requests.HelloRequest, any]
 		Execute(ctx context.Context, req requests.HelloRequest) (responses.HelloOutput, error)
 	}
 
 	HealthController interface {
-		Controller
+		Controller[any, any]
 	}
 )

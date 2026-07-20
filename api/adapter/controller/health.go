@@ -14,7 +14,7 @@ func NewHealthController() ports.HealthController {
 	return &healthController{}
 }
 
-func (c *healthController) WrapperExecute(ctx context.Context, req requests.Request[any]) (any, error) {
+func (c *healthController) WrapperExecute(ctx context.Context, req requests.Request[any, any]) (any, error) {
 	return map[string]string{
 		"status": "ok",
 	}, nil

@@ -21,7 +21,7 @@ Será criado um contrato de cliente na camada `core` e sua implementação concr
 - O uso de `core/domain/enums` deverá incluir um enum `HttpMethod` com os métodos suportados: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS` e `HEAD`.
 
 ### Implementações
-- `infra/clients/http` para chamadas HTTP usando `net/http` ou `fasthttp`.
+- `infra/clients/http` para chamadas HTTP usando `net/http` e outro com `fasthttp`.
 - `infra/clients/grpc` para chamadas gRPC, se necessário no futuro.
 - Cada implementação deve assumir a responsabilidade de serialização, configuração e tratamento de transporte, sem expor detalhes do framework para o domínio.
 - a alteração entre grpc ou http não deverá ser sentido

@@ -1,9 +1,10 @@
-package nethttp
+package gin
 
 import (
-	"encoding/json"
+	"io"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -12,70 +13,66 @@ import (
 )
 
 type adapter struct {
-	mux    *http.ServeMux
+	engine *gin.Engine
 	handle ports.Handler
 	tracer tracing.Tracer
 }
 
 func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
+	gin.SetMode(gin.ReleaseMode)
+	engine := gin.New()
 	return &adapter{
-		mux:    http.NewServeMux(),
+		engine: engine,
 		handle: handle,
-		tracer: tracing.NewTracer("nethttp-adapter"),
+		tracer: tracing.NewTracer("gin-adapter"),
 	}
 }
 
 func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller) {
-	a.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != method {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		ctx, span := a.tracer.Start(r.Context(), "http.request")
+	a.engine.Handle(method, path, func(c *gin.Context) {
+		ctx, span := a.tracer.Start(c.Request.Context(), "http.request")
 		defer span.End()
 
 		l := logger.FromContext(ctx)
 		ctx = logger.ToContext(ctx, l)
 
 		l.Info("incoming request", logger.LoggerFieldType{
-			"method":   r.Method,
-			"path":     r.URL.Path,
+			"method":   c.Request.Method,
+			"path":     c.Request.URL.Path,
 			"trace_id": a.tracer.GetTraceID(ctx),
 		})
 
 		var body any
-		if r.ContentLength > 0 {
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if c.Request.ContentLength > 0 {
+			if err := c.ShouldBindJSON(&body); err != nil && err != io.EOF {
 				resp := a.handle.ResolveError(ctx, err)
-				a.writeResponse(w, resp)
+				c.JSON(http.StatusOK, resp)
 				return
 			}
 		}
 
 		headers := domain.NewHttpParam()
-		headers.SetAll(r.Header)
+		headers.SetAll(c.Request.Header)
 
 		query := domain.NewHttpParam()
-		query.SetAll(r.URL.Query())
+		query.SetAll(c.Request.URL.Query())
 
-		req := requests.NewRequestFromParams(body, headers, query, nil, &requests.HelloRequest{})
+		pathParams := domain.NewHttpParam()
+		for _, param := range c.Params {
+			pathParams.Set(param.Key, param.Value)
+		}
+
+		req := requests.NewRequestFromParams(body, headers, query, pathParams, &requests.HelloRequest{})
 		result, err := ctrl.WrapperExecute(ctx, req)
 		if err != nil {
 			resp := a.handle.ResolveError(ctx, err)
-			a.writeResponse(w, resp)
+			c.JSON(http.StatusOK, resp)
 			return
 		}
 
 		resp := a.handle.Handle(ctx, http.StatusOK, result, nil)
-		a.writeResponse(w, resp)
+		c.JSON(http.StatusOK, resp)
 	})
-}
-
-func (a *adapter) writeResponse(w http.ResponseWriter, resp any) {
-	w.Header().Set("Content-Type", "application/json")
-	b, _ := json.Marshal(resp)
-	w.Write(b)
 }
 
 func (a *adapter) Use(middleware ports.Middleware) {
@@ -83,5 +80,5 @@ func (a *adapter) Use(middleware ports.Middleware) {
 }
 
 func (a *adapter) Start(addr string) error {
-	return http.ListenAndServe(addr, a.mux)
+	return a.engine.Run(addr)
 }

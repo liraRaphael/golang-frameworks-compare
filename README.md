@@ -61,6 +61,7 @@ Cada framework será avaliado por recursos prontos que ele oferece, como roteame
 Os cenários foram escolhidos para cobrir diferentes tipos de custo operacional e de concorrência.
 
 ### Básicos
+- Health Check: devolver um sucesso visando que a aplicação está saudável
 - Hello World: mede o custo mínimo de uma requisição simples.
 - Conversor de Moedas: avalia binding, validação e serialização sem acesso a banco.
 - Buscador de CEP: testa leitura de dados em cache e uso de parâmetros de rota.

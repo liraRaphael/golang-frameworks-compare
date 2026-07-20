@@ -1,9 +1,10 @@
-package nethttp
+package chi
 
 import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -12,26 +13,21 @@ import (
 )
 
 type adapter struct {
-	mux    *http.ServeMux
+	router chi.Router
 	handle ports.Handler
 	tracer tracing.Tracer
 }
 
 func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 	return &adapter{
-		mux:    http.NewServeMux(),
+		router: chi.NewRouter(),
 		handle: handle,
-		tracer: tracing.NewTracer("nethttp-adapter"),
+		tracer: tracing.NewTracer("chi-adapter"),
 	}
 }
 
 func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller) {
-	a.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != method {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
+	a.router.MethodFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
 		ctx, span := a.tracer.Start(r.Context(), "http.request")
 		defer span.End()
 
@@ -59,7 +55,16 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 		query := domain.NewHttpParam()
 		query.SetAll(r.URL.Query())
 
-		req := requests.NewRequestFromParams(body, headers, query, nil, &requests.HelloRequest{})
+		pathParams := domain.NewHttpParam()
+		rctx := chi.RouteContext(r.Context())
+		if rctx != nil {
+			for i, key := range rctx.URLParams.Keys {
+				value := rctx.URLParams.Values[i]
+				pathParams.Set(key, value)
+			}
+		}
+
+		req := requests.NewRequestFromParams(body, headers, query, pathParams, &requests.HelloRequest{})
 		result, err := ctrl.WrapperExecute(ctx, req)
 		if err != nil {
 			resp := a.handle.ResolveError(ctx, err)
@@ -83,5 +88,5 @@ func (a *adapter) Use(middleware ports.Middleware) {
 }
 
 func (a *adapter) Start(addr string) error {
-	return http.ListenAndServe(addr, a.mux)
+	return http.ListenAndServe(addr, a.router)
 }

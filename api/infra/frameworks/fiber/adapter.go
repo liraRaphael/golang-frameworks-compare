@@ -12,6 +12,19 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
 
+type requestWrapper struct {
+	requests.Request[any, any]
+	headers     domain.HttpParamsType
+	queryParams domain.HttpParamsType
+	pathParams  domain.HttpParamsType
+	cookies     domain.HttpParamsType
+}
+
+func (w requestWrapper) Headers() domain.HttpParamsType     { return w.headers }
+func (w requestWrapper) QueryParams() domain.HttpParamsType { return w.queryParams }
+func (w requestWrapper) PathParams() domain.HttpParamsType  { return w.pathParams }
+func (w requestWrapper) Cookies() domain.HttpParamsType     { return w.cookies }
+
 type adapter struct {
 	app    *fiber.App
 	handle ports.Handler
@@ -29,7 +42,7 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 	}
 }
 
-func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller) {
+func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
 	a.app.Add(method, path, func(c *fiber.Ctx) error {
 		ctx, span := a.tracer.Start(c.UserContext(), "http.request")
 		defer span.End()
@@ -51,35 +64,38 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 			}
 		}
 
-		headers := domain.NewHttpParam()
-		headersMap := make(map[string][]string)
+		headers := domain.HttpParamsType{}
 		c.Request().Header.VisitAll(func(key, value []byte) {
 			k := string(key)
-			headersMap[k] = append(headersMap[k], string(value))
+			headers[k] = append(headers[k], string(value))
 		})
-		headers.SetAll(headersMap)
 
-		query := domain.NewHttpParam()
-		queryMap := make(map[string][]string)
+		query := domain.HttpParamsType{}
 		c.Request().URI().QueryArgs().VisitAll(func(key, value []byte) {
 			k := string(key)
-			queryMap[k] = append(queryMap[k], string(value))
+			query[k] = append(query[k], string(value))
 		})
-		query.SetAll(queryMap)
 
-		pathParams := domain.NewHttpParam()
+		pathParams := domain.HttpParamsType{}
 		for k, v := range c.AllParams() {
-			pathParams.Set(k, v)
+			pathParams[k] = domain.HttpParamType{v}
 		}
 
-		req := requests.NewRequestFromParams(body, headers, query, pathParams, &requests.HelloRequest{})
+		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, pathParams, nil)
+		req := requestWrapper{
+			Request:     rawReq,
+			headers:     headers,
+			queryParams: query,
+			pathParams:  pathParams,
+		}
+
 		result, err := ctrl.WrapperExecute(ctx, req)
 		if err != nil {
 			resp := a.handle.ResolveError(ctx, err)
 			return c.Status(http.StatusOK).JSON(resp)
 		}
 
-		resp := a.handle.Handle(ctx, http.StatusOK, result, nil)
+		resp := a.handle.Handle(ctx, http.StatusOK, result, nil, nil)
 		return c.Status(http.StatusOK).JSON(resp)
 	})
 }

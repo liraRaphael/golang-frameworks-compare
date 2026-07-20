@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
-	"github.com/liraraphael/go-framework-bench/api/core/domain/enums"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/stretchr/testify/assert"
@@ -26,15 +25,15 @@ func (d *dummyController) WrapperExecute(ctx context.Context, req requests.Reque
 
 type dummyHandler struct{}
 
-func (d *dummyHandler) Handle(ctx context.Context, successStatusCode int, output any, headers domain.HttpParam) *responses.Response[any] {
-	return &responses.Response[any]{StatusCode: successStatusCode, Body: output}
+func (d *dummyHandler) Handle(ctx context.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any] {
+	return responses.NewResponse[any, any](output, nil, successStatusCode)
 }
 
-func (d *dummyHandler) RegisterByMessage(message string, fn enums.ErrorResponseFuncType) {}
-func (d *dummyHandler) RegisterByType(err error, fn enums.ErrorResponseFuncType)         {}
+func (d *dummyHandler) RegisterByMessage(message string, fn responses.ErrorResponseFuncType) {}
+func (d *dummyHandler) RegisterByType(err error, fn responses.ErrorResponseFuncType)         {}
 
-func (d *dummyHandler) ResolveError(ctx context.Context, err error) *responses.Response[any] {
-	return &responses.Response[any]{StatusCode: 400, Body: err.Error()}
+func (d *dummyHandler) ResolveError(ctx context.Context, err error) responses.Response[any, any] {
+	return responses.NewResponse[any, any](err.Error(), nil, 400)
 }
 
 func TestNetHttpAdapter(t *testing.T) {
@@ -43,7 +42,7 @@ func TestNetHttpAdapter(t *testing.T) {
 
 	t.Run("successful GET request", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any]) (any, error) {
+			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
 				return map[string]string{"message": "success"}, nil
 			},
 		}
@@ -57,7 +56,10 @@ func TestNetHttpAdapter(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var resp responses.Response[map[string]string]
+		var resp struct {
+			Body       map[string]string `json:"Body"`
+			StatusCode int               `json:"StatusCode"`
+		}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.NoError(t, err)
 		assert.Equal(t, 200, resp.StatusCode)
@@ -66,7 +68,7 @@ func TestNetHttpAdapter(t *testing.T) {
 
 	t.Run("method not allowed", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any]) (any, error) {
+			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
 				return "ok", nil
 			},
 		}
@@ -83,7 +85,7 @@ func TestNetHttpAdapter(t *testing.T) {
 
 	t.Run("controller error handling", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any]) (any, error) {
+			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
 				return nil, errors.New("something went wrong")
 			},
 		}
@@ -95,7 +97,10 @@ func TestNetHttpAdapter(t *testing.T) {
 
 		adapter.mux.ServeHTTP(w, req)
 
-		var resp responses.Response[string]
+		var resp struct {
+			Body       string `json:"Body"`
+			StatusCode int    `json:"StatusCode"`
+		}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.NoError(t, err)
 		assert.Equal(t, 400, resp.StatusCode)
@@ -104,7 +109,7 @@ func TestNetHttpAdapter(t *testing.T) {
 
 	t.Run("with JSON body parsing", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any]) (any, error) {
+			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
 				bodyMap, ok := req.Body().(map[string]any)
 				if !ok {
 					return nil, errors.New("invalid body format")
@@ -124,7 +129,10 @@ func TestNetHttpAdapter(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 
-		var resp responses.Response[map[string]string]
+		var resp struct {
+			Body       map[string]string `json:"Body"`
+			StatusCode int               `json:"StatusCode"`
+		}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.NoError(t, err)
 		assert.Equal(t, 200, resp.StatusCode)
@@ -133,7 +141,7 @@ func TestNetHttpAdapter(t *testing.T) {
 
 	t.Run("invalid JSON body parsing", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any]) (any, error) {
+			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
 				return "ok", nil
 			},
 		}
@@ -145,7 +153,10 @@ func TestNetHttpAdapter(t *testing.T) {
 
 		adapter.mux.ServeHTTP(w, req)
 
-		var resp responses.Response[string]
+		var resp struct {
+			Body       string `json:"Body"`
+			StatusCode int    `json:"StatusCode"`
+		}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.NoError(t, err)
 		assert.Equal(t, 400, resp.StatusCode)

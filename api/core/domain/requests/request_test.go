@@ -14,17 +14,40 @@ type testParams struct {
 }
 
 func TestRequestParams(t *testing.T) {
-	headers := domain.NewHttpParam()
-	headers.Set("X-Trace", "abc")
+	headers := domain.HttpParamsType{
+		"X-Trace": []string{"abc"},
+	}
 
-	query := domain.NewHttpParam()
-	query.Set("name", "Ada")
+	query := domain.HttpParamsType{
+		"name": []string{"Ada"},
+	}
 
-	pathParams := domain.NewHttpParam()
-	pathParams.Set("id", "42")
+	pathParams := domain.HttpParamsType{
+		"id": []string{"42"},
+	}
 
-	params := testParams{}
-	req := NewRequestFromParams("body", headers, query, pathParams, &params)
+	req := NewRequestFromParams[string, *testParams]("body", headers, query, pathParams, nil)
+	paramValues := req.Params()
+
+	require.Equal(t, "Ada", paramValues.Name)
+	require.Equal(t, "abc", paramValues.Trace)
+	require.Equal(t, "42", paramValues.ID)
+}
+
+func TestRequestParamsWithNonPointerParamType(t *testing.T) {
+	headers := domain.HttpParamsType{
+		"X-Trace": []string{"abc"},
+	}
+
+	query := domain.HttpParamsType{
+		"name": []string{"Ada"},
+	}
+
+	pathParams := domain.HttpParamsType{
+		"id": []string{"42"},
+	}
+
+	req := NewRequestFromParams[string, testParams]("body", headers, query, pathParams, nil)
 	paramValues := req.Params()
 
 	require.Equal(t, "Ada", paramValues.Name)

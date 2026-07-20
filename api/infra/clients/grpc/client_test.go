@@ -20,10 +20,11 @@ func TestGrpcClient(t *testing.T) {
 	}
 
 	t.Run("Do returns unimplemeted ClientError", func(t *testing.T) {
-		headers := domain.NewHttpParam()
-		headers.Set("X-Test-Header", "Value")
+		headers := domain.HttpParamsType{
+			"X-Test-Header": []string{"Value"},
+		}
 
-		req := requests.NewRequestFromParams[any](nil, headers, nil, nil, nil)
+		req := requests.NewRequestFromParams[any, any](nil, headers, nil, nil, nil)
 		resp, err := client.Do(context.Background(), enums.MethodGet, "some-url", req)
 
 		assert.Nil(t, resp)

@@ -28,7 +28,7 @@ func NewHttpClient(timeout time.Duration) ports.Client {
 	}
 }
 
-func (c *httpClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (*responses.Response[any], error) {
+func (c *httpClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
 	var bodyReader io.Reader
 	if req.Body() != nil {
 		b, err := json.Marshal(req.Body())
@@ -44,7 +44,7 @@ func (c *httpClient) Do(ctx context.Context, method enums.HttpMethod, url string
 	}
 
 	if req.Headers() != nil {
-		for k, v := range req.Headers().GetAll() {
+		for k, v := range req.Headers() {
 			for _, val := range v {
 				httpReq.Header.Add(k, val)
 			}
@@ -66,8 +66,10 @@ func (c *httpClient) Do(ctx context.Context, method enums.HttpMethod, url string
 		return nil, &errors.ClientError{StatusCode: resp.StatusCode, Message: "failed to read response body", Err: err}
 	}
 
-	headers := domain.NewHttpParam()
-	headers.SetAll(resp.Header)
+	headers := domain.HttpParamsType{}
+	for k, v := range resp.Header {
+		headers[k] = domain.HttpParamType(v)
+	}
 
 	var responseBody any
 	if len(respBody) > 0 {
@@ -78,9 +80,5 @@ func (c *httpClient) Do(ctx context.Context, method enums.HttpMethod, url string
 		}
 	}
 
-	return &responses.Response[any]{
-		Body:       responseBody,
-		StatusCode: resp.StatusCode,
-		Headers:    headers,
-	}, nil
+	return responses.NewResponseFromParams[any, any](responseBody, resp.StatusCode, headers, nil), nil
 }

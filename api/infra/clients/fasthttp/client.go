@@ -27,7 +27,7 @@ func NewFastHttpClient(timeout time.Duration) ports.Client {
 	}
 }
 
-func (c *fastHttpClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (*responses.Response[any], error) {
+func (c *fastHttpClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
 	fReq := fasthttp.AcquireRequest()
 	fResp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(fReq)
@@ -37,7 +37,7 @@ func (c *fastHttpClient) Do(ctx context.Context, method enums.HttpMethod, url st
 	fReq.Header.SetMethod(string(method))
 
 	if req.Headers() != nil {
-		for k, v := range req.Headers().GetAll() {
+		for k, v := range req.Headers() {
 			for _, val := range v {
 				fReq.Header.Add(k, val)
 			}
@@ -69,9 +69,10 @@ func (c *fastHttpClient) Do(ctx context.Context, method enums.HttpMethod, url st
 	respBody := fResp.Body()
 	statusCode := fResp.StatusCode()
 
-	headers := domain.NewHttpParam()
+	headers := domain.HttpParamsType{}
 	fResp.Header.VisitAll(func(key, value []byte) {
-		headers.Set(string(key), string(value))
+		k := string(key)
+		headers[k] = append(headers[k], string(value))
 	})
 
 	var responseBody any
@@ -81,9 +82,5 @@ func (c *fastHttpClient) Do(ctx context.Context, method enums.HttpMethod, url st
 		}
 	}
 
-	return &responses.Response[any]{
-		Body:       responseBody,
-		StatusCode: statusCode,
-		Headers:    headers,
-	}, nil
+	return responses.NewResponseFromParams[any, any](responseBody, statusCode, headers, nil), nil
 }

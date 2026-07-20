@@ -13,6 +13,19 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
 
+type requestWrapper struct {
+	requests.Request[any, any]
+	headers     domain.HttpParamsType
+	queryParams domain.HttpParamsType
+	pathParams  domain.HttpParamsType
+	cookies     domain.HttpParamsType
+}
+
+func (w requestWrapper) Headers() domain.HttpParamsType     { return w.headers }
+func (w requestWrapper) QueryParams() domain.HttpParamsType { return w.queryParams }
+func (w requestWrapper) PathParams() domain.HttpParamsType  { return w.pathParams }
+func (w requestWrapper) Cookies() domain.HttpParamsType     { return w.cookies }
+
 type adapter struct {
 	server *web.HttpServer
 	handle ports.Handler
@@ -51,24 +64,33 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 			}
 		}
 
-		headers := domain.NewHttpParam()
-		headers.SetAll(ctx.Request.Header)
+		headers := domain.HttpParamsType{}
+		for k, v := range ctx.Request.Header {
+			headers[k] = domain.HttpParamType(v)
+		}
 
-		query := domain.NewHttpParam()
-		query.SetAll(ctx.Request.URL.Query())
+		query := domain.HttpParamsType{}
+		for k, v := range ctx.Request.URL.Query() {
+			query[k] = domain.HttpParamType(v)
+		}
 
-		pathParams := domain.NewHttpParam()
+		pathParams := domain.HttpParamsType{}
 		for k, v := range ctx.Input.Params() {
 			key := k
 			if len(key) > 0 && key[0] == ':' {
 				key = key[1:]
 			}
-			pathParams.Set(key, v)
+			pathParams[key] = domain.HttpParamType{v}
 		}
 
-		cookies := domain.NewHttpParam()
+		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, pathParams, nil)
+		req := requestWrapper{
+			Request:     rawReq,
+			headers:     headers,
+			queryParams: query,
+			pathParams:  pathParams,
+		}
 
-		req := requests.NewRequestFromParams(body, headers, query, pathParams, cookies)
 		result, err := ctrl.WrapperExecute(rCtx, req)
 		if err != nil {
 			resp := a.handle.ResolveError(rCtx, err)
@@ -76,7 +98,7 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 			return
 		}
 
-		resp := a.handle.Handle(rCtx, http.StatusOK, result, nil)
+		resp := a.handle.Handle(rCtx, http.StatusOK, result, nil, nil)
 		a.writeResponse(ctx, resp)
 	}
 

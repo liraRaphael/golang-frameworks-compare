@@ -25,10 +25,10 @@ func NewGrpcClient(target string) (ports.Client, error) {
 	return &grpcClient{conn: conn}, nil
 }
 
-func (c *grpcClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (*responses.Response[any], error) {
+func (c *grpcClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
 	if req.Headers() != nil {
 		md := metadata.New(nil)
-		for k, v := range req.Headers().GetAll() {
+		for k, v := range req.Headers() {
 			for _, val := range v {
 				md.Append(k, val)
 			}

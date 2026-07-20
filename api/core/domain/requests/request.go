@@ -6,6 +6,14 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 )
 
+type Param[T any] struct {
+	Name        string
+	In          string
+	Required    bool
+	Description string
+	Value       T
+}
+
 type (
 	Request[BodyType any, ParamType any] interface {
 		Body() BodyType

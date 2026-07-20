@@ -2,6 +2,7 @@ package responses
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
@@ -48,8 +49,9 @@ func NewResponseFromParams[BodyType any, ParamType any](body BodyType, statusCod
 	}
 
 	r := Responser[BodyType, ParamType]{
-		body:   body,
-		params: params,
+		body:       body,
+		params:     params,
+		statusCode: statusCode,
 	}
 
 	r.headersParamsFields, _, _, r.cookiesParamsFields = r.extractParamsFromTag()
@@ -85,4 +87,16 @@ func (r Responser[BodyType, ParamType]) extractParamsFromTag() (headersFields []
 func (r Responser[BodyType, ParamType]) getParamsValuesInKnowsFields(indexs []int) domain.HttpParamsType {
 	vOf := reflect.ValueOf(r.params)
 	return domain.ParamsValuesToHttpParamsType(vOf, indexs)
+}
+
+func (r Responser[BodyType, ParamType]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Body       BodyType              `json:"Body"`
+		StatusCode int                   `json:"StatusCode"`
+		Headers    domain.HttpParamsType `json:"Headers"`
+	}{
+		Body:       r.body,
+		StatusCode: r.statusCode,
+		Headers:    r.Headers(),
+	})
 }

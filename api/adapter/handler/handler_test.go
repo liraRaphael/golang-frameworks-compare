@@ -24,19 +24,19 @@ func TestStandardHandler_Handle(t *testing.T) {
 
 	t.Run("success response handling", func(t *testing.T) {
 		output := map[string]string{"result": "ok"}
-		resp := h.Handle(ctx, http.StatusOK, output, nil)
+		resp := h.Handle(ctx, http.StatusOK, output, nil, nil)
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, output, resp.Body)
+		assert.Equal(t, http.StatusOK, resp.StatusCode())
+		assert.Equal(t, output, resp.Body())
 	})
 
 	t.Run("unmapped error returns 500 internal_error", func(t *testing.T) {
 		err := errors.New("something went wrong")
-		resp := h.Handle(ctx, http.StatusOK, err, nil)
+		resp := h.Handle(ctx, http.StatusOK, err, nil, nil)
 
-		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode())
 		
-		body, ok := resp.Body.(*responses.ErrorResponse)
+		body, ok := resp.Body().(*responses.ErrorResponse)
 		assert.True(t, ok)
 		assert.Equal(t, "internal_error", body.Code)
 		assert.Equal(t, "Erro interno do servidor não mapeado", body.Message)
@@ -46,17 +46,18 @@ func TestStandardHandler_Handle(t *testing.T) {
 		hCustom := NewStandardHandler()
 		targetErr := errors.New("user not found")
 
-		hCustom.RegisterByMessage("user not found", func(ctx context.Context, err error) *responses.Response[any] {
-			return &responses.Response[any]{
-				StatusCode: http.StatusNotFound,
-				Body:       &responses.ErrorResponse{Code: "not_found", Message: err.Error()},
-			}
+		hCustom.RegisterByMessage("user not found", func(ctx context.Context, err error) responses.Response[any, any] {
+			return responses.NewResponse[any, any](
+				&responses.ErrorResponse{Code: "not_found", Message: err.Error()},
+				nil,
+				http.StatusNotFound,
+			)
 		})
 
-		resp := hCustom.Handle(ctx, http.StatusOK, targetErr, nil)
+		resp := hCustom.Handle(ctx, http.StatusOK, targetErr, nil, nil)
 
-		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
-		body, ok := resp.Body.(*responses.ErrorResponse)
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode())
+		body, ok := resp.Body().(*responses.ErrorResponse)
 		assert.True(t, ok)
 		assert.Equal(t, "not_found", body.Code)
 		assert.Equal(t, "user not found", body.Message)
@@ -66,17 +67,18 @@ func TestStandardHandler_Handle(t *testing.T) {
 		hCustom := NewStandardHandler()
 		targetErr := &customTestError{msg: "some type error"}
 
-		hCustom.RegisterByType(&customTestError{}, func(ctx context.Context, err error) *responses.Response[any] {
-			return &responses.Response[any]{
-				StatusCode: http.StatusConflict,
-				Body:       &responses.ErrorResponse{Code: "conflict_type", Message: err.Error()},
-			}
+		hCustom.RegisterByType(&customTestError{}, func(ctx context.Context, err error) responses.Response[any, any] {
+			return responses.NewResponse[any, any](
+				&responses.ErrorResponse{Code: "conflict_type", Message: err.Error()},
+				nil,
+				http.StatusConflict,
+			)
 		})
 
-		resp := hCustom.Handle(ctx, http.StatusOK, targetErr, nil)
+		resp := hCustom.Handle(ctx, http.StatusOK, targetErr, nil, nil)
 
-		assert.Equal(t, http.StatusConflict, resp.StatusCode)
-		body, ok := resp.Body.(*responses.ErrorResponse)
+		assert.Equal(t, http.StatusConflict, resp.StatusCode())
+		body, ok := resp.Body().(*responses.ErrorResponse)
 		assert.True(t, ok)
 		assert.Equal(t, "conflict_type", body.Code)
 		assert.Equal(t, "some type error", body.Message)

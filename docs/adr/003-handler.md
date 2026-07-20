@@ -2,7 +2,7 @@
 
 **Status**: Aceito
 
-**Data**: 2026-06-24
+**Data**: 2026-07-19
 
 **Tags**: [handler, clean-arch, response, error, success, mapeamento, json]
 
@@ -25,7 +25,7 @@ A implementação inicial utilizará a biblioteca padrão `encoding/json` para s
 - A implementação concreta do handler deve ser mantida em `adapter/handler` e consumida pela camada de infraestrutura por meio da interface `ports.Handler`.
 
 ### Resposta padrão
-A resposta padrão deve seguir o seguinte formato:
+A resposta padrão de erro deve seguir o seguinte formato:
 
 ```json
 {
@@ -45,11 +45,11 @@ A resposta padrão deve seguir o seguinte formato:
 
 ### Estratégia de mapeamento
 - O handler usará o padrão Strategy para escolher como mapear um erro para uma resposta.
-- A função de mapeamento será definida como um tipo em `core/ports` com a assinatura `ErrorResponseFuncType`.
+- A função de mapeamento será definida como um tipo em `responses` com a assinatura `ErrorResponseFuncType`.
 - O contrato da função anônima será:
 
 ```go
-type ErrorResponseFuncType func(ctx context.Context, err error) *Response
+type ErrorResponseFuncType func(ctx context.Context, err error) Response[any, any]
 ```
 
 - O handler deverá manter dois mecanismos de lookup:
@@ -63,20 +63,14 @@ type ErrorResponseFuncType func(ctx context.Context, err error) *Response
 ### Interface do handler
 ```go
 type Handler interface {
-    Handle(ctx context.Context, result any) *Response
+    Handle(ctx context.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any]
+    RegisterByMessage(message string, fn responses.ErrorResponseFuncType)
+    RegisterByType(err error, fn responses.ErrorResponseFuncType)
+    ResolveError(ctx context.Context, err error) responses.Response[any, any]
 }
 ```
 
 A interface permanece definida em `core/ports` para manter o contrato do domínio desacoplado do framework e da infraestrutura.
-
-### Interface de estratégia
-```go
-type ErrorHandlerStrategy interface {
-    RegisterByMessage(message string, fn ErrorResponseFuncType)
-    RegisterByType(err error, fn ErrorResponseFuncType)
-    Resolve(ctx context.Context, err error) *Response
-}
-```
 
 ### Logging
 - O handler deve registrar eventos de erro e sucesso com contexto de requisição.

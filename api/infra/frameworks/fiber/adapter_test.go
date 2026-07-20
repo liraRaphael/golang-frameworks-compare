@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
-	"github.com/liraraphael/go-framework-bench/api/core/domain/enums"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/stretchr/testify/assert"
@@ -25,13 +24,13 @@ func (d *dummyController) WrapperExecute(ctx context.Context, req requests.Reque
 
 type dummyHandler struct{}
 
-func (d *dummyHandler) Handle(ctx context.Context, successStatusCode int, output any, headers domain.HttpParam) *responses.Response[any] {
-	return &responses.Response[any]{StatusCode: successStatusCode, Body: output}
+func (d *dummyHandler) Handle(ctx context.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any] {
+	return responses.NewResponse[any, any](output, nil, successStatusCode)
 }
-func (d *dummyHandler) RegisterByMessage(message string, fn enums.ErrorResponseFuncType) {}
-func (d *dummyHandler) RegisterByType(err error, fn enums.ErrorResponseFuncType)         {}
-func (d *dummyHandler) ResolveError(ctx context.Context, err error) *responses.Response[any] {
-	return &responses.Response[any]{StatusCode: 500, Body: err.Error()}
+func (d *dummyHandler) RegisterByMessage(message string, fn responses.ErrorResponseFuncType) {}
+func (d *dummyHandler) RegisterByType(err error, fn responses.ErrorResponseFuncType)         {}
+func (d *dummyHandler) ResolveError(ctx context.Context, err error) responses.Response[any, any] {
+	return responses.NewResponse[any, any](err.Error(), nil, 500)
 }
 
 func TestFiberAdapter(t *testing.T) {
@@ -39,8 +38,12 @@ func TestFiberAdapter(t *testing.T) {
 	adapter := NewAdapter(dh).(*adapter)
 
 	ctrl := &dummyController{
-		fn: func(ctx context.Context, req requests.Request[any]) (any, error) {
-			param, _ := req.PathParams().GetFirst("id")
+		fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
+			values := req.PathParams().GetValues("id")
+			var param string
+			if len(values) > 0 {
+				param = values[0]
+			}
 			return map[string]string{"id": param}, nil
 		},
 	}
@@ -55,7 +58,10 @@ func TestFiberAdapter(t *testing.T) {
 	bodyBytes, err := io.ReadAll(resp.Body)
 	assert.NoError(t, err)
 
-	var apiResp responses.Response[map[string]string]
+	var apiResp struct {
+		Body       map[string]string `json:"Body"`
+		StatusCode int               `json:"StatusCode"`
+	}
 	err = json.Unmarshal(bodyBytes, &apiResp)
 	assert.NoError(t, err)
 	assert.Equal(t, 200, apiResp.StatusCode)

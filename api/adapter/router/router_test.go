@@ -12,7 +12,7 @@ import (
 )
 
 type MockFrameworkAdapter struct {
-	Routes      map[string]ports.Controller
+	Routes      map[string]ports.Controller[any, any]
 	Middlewares []ports.Middleware
 	StartAddr   string
 	StartErr    error
@@ -20,11 +20,11 @@ type MockFrameworkAdapter struct {
 
 func NewMockFrameworkAdapter() *MockFrameworkAdapter {
 	return &MockFrameworkAdapter{
-		Routes: make(map[string]ports.Controller),
+		Routes: make(map[string]ports.Controller[any, any]),
 	}
 }
 
-func (m *MockFrameworkAdapter) RegisterRoute(method string, path string, ctrl ports.Controller) {
+func (m *MockFrameworkAdapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
 	m.Routes[method+":"+path] = ctrl
 }
 

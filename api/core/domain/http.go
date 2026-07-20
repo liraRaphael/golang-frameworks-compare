@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type ParameterIn string
@@ -147,33 +148,16 @@ func (p *HttpParamType) Clear() {
 	p = &HttpParamType{}
 }
 
-func ExtractParamsFromTag(typ reflect.Type) (headersFields []int, queryFields []int, pathFields []int, cookieFields []int) {
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-
-		inType, _, hasTag := ParseParamTag(field)
-		if !hasTag {
-			continue
-		}
-
-		switch inType {
-		case ParameterInHeader:
-			headersFields = append(headersFields, i)
-		case ParameterInQuery:
-			queryFields = append(queryFields, i)
-		case ParameterInPath:
-			pathFields = append(pathFields, i)
-		case ParameterInCookie:
-			cookieFields = append(cookieFields, i)
-		default:
-			continue
-		}
-	}
-	return
-
-}
-
 func ParamsValuesToHttpParamsType(vOf reflect.Value, indexs []int) HttpParamsType {
+	if !vOf.IsValid() {
+		return nil
+	}
+	if vOf.Kind() == reflect.Pointer {
+		vOf = vOf.Elem()
+	}
+	if !vOf.IsValid() {
+		return nil
+	}
 	typ := vOf.Type()
 	kind := vOf.Kind()
 
@@ -281,30 +265,82 @@ func ParseParamTag(field reflect.StructField) (ParameterIn, string, bool) {
 	return "", "", false
 }
 
-func ValidPointerType[ParamType any](params ParamType) (reflect.Value, error) {
-	value := reflect.ValueOf(params)
-	if value.Kind() != reflect.Pointer || value.IsNil() {
-		return value, fmt.Errorf("Empty type parameter")
+type cachedFields struct {
+	headersFields []int
+	queryFields   []int
+	pathFields    []int
+	cookieFields  []int
+}
+
+var paramsTagCache sync.Map // map[reflect.Type]*cachedFields
+
+func ExtractParamsFromTag(typ reflect.Type) (headersFields []int, queryFields []int, pathFields []int, cookieFields []int) {
+	if typ == nil {
+		return
+	}
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	if typ.Kind() != reflect.Struct {
+		return
 	}
 
-	elem := value.Elem()
-	if !elem.CanSet() {
-		return value, fmt.Errorf("target must be settable")
+	if cached, ok := paramsTagCache.Load(typ); ok {
+		cf := cached.(*cachedFields)
+		return cf.headersFields, cf.queryFields, cf.pathFields, cf.cookieFields
 	}
 
-	if elem.Kind() != reflect.Struct {
-		return value, fmt.Errorf("target must be a struct")
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+
+		inType, _, hasTag := ParseParamTag(field)
+		if !hasTag {
+			continue
+		}
+
+		switch inType {
+		case ParameterInHeader:
+			headersFields = append(headersFields, i)
+		case ParameterInQuery:
+			queryFields = append(queryFields, i)
+		case ParameterInPath:
+			pathFields = append(pathFields, i)
+		case ParameterInCookie:
+			cookieFields = append(cookieFields, i)
+		default:
+			continue
+		}
 	}
 
-	return value, nil
+	paramsTagCache.Store(typ, &cachedFields{
+		headersFields: headersFields,
+		queryFields:   queryFields,
+		pathFields:    pathFields,
+		cookieFields:  cookieFields,
+	})
+
+	return
 }
 
 func PopulateParams[ParamType any](headers, queryParams, pathParams, cookies HttpParamsType) (ParamType, error) {
 	var params ParamType
-	elem, err := ValidPointerType(params)
-	if err != nil {
-		return params, err
+	typ := reflect.TypeOf((*ParamType)(nil)).Elem()
+
+	var structType reflect.Type
+	switch typ.Kind() {
+	case reflect.Pointer:
+		structType = typ.Elem()
+	case reflect.Struct:
+		structType = typ
+	default:
+		return params, nil
 	}
+
+	if structType.Kind() != reflect.Struct {
+		return params, nil
+	}
+
+	elem := reflect.New(structType).Elem()
 
 	for i := 0; i < elem.NumField(); i++ {
 		field := elem.Field(i)
@@ -339,6 +375,13 @@ func PopulateParams[ParamType any](headers, queryParams, pathParams, cookies Htt
 		if err := SetFieldValue(field, values[0]); err != nil {
 			return params, err
 		}
+	}
+
+	switch typ.Kind() {
+	case reflect.Pointer:
+		params = elem.Addr().Interface().(ParamType)
+	case reflect.Struct:
+		params = elem.Interface().(ParamType)
 	}
 
 	return params, nil

@@ -10,7 +10,7 @@ import (
 
 func TestHealthController_WrapperExecute(t *testing.T) {
 	ctrl := NewHealthController()
-	req := requests.NewRequestFromParams[any](nil, nil, nil, nil, nil)
+	req := requests.NewRequestFromParams[any, any](nil, nil, nil, nil, nil)
 
 	res, err := ctrl.WrapperExecute(context.Background(), req)
 

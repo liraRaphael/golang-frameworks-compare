@@ -11,6 +11,19 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
 
+type requestWrapper struct {
+	requests.Request[any, any]
+	headers     domain.HttpParamsType
+	queryParams domain.HttpParamsType
+	pathParams  domain.HttpParamsType
+	cookies     domain.HttpParamsType
+}
+
+func (w requestWrapper) Headers() domain.HttpParamsType     { return w.headers }
+func (w requestWrapper) QueryParams() domain.HttpParamsType { return w.queryParams }
+func (w requestWrapper) PathParams() domain.HttpParamsType  { return w.pathParams }
+func (w requestWrapper) Cookies() domain.HttpParamsType     { return w.cookies }
+
 type adapter struct {
 	mux    *http.ServeMux
 	handle ports.Handler
@@ -25,7 +38,7 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 	}
 }
 
-func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller) {
+func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
 	a.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != method {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -53,13 +66,23 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 			}
 		}
 
-		headers := domain.NewHttpParam()
-		headers.SetAll(r.Header)
+		headers := domain.HttpParamsType{}
+		for k, v := range r.Header {
+			headers[k] = domain.HttpParamType(v)
+		}
 
-		query := domain.NewHttpParam()
-		query.SetAll(r.URL.Query())
+		query := domain.HttpParamsType{}
+		for k, v := range r.URL.Query() {
+			query[k] = domain.HttpParamType(v)
+		}
 
-		req := requests.NewRequestFromParams(body, headers, query, nil, &requests.HelloRequest{})
+		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, nil, nil)
+		req := requestWrapper{
+			Request:     rawReq,
+			headers:     headers,
+			queryParams: query,
+		}
+
 		result, err := ctrl.WrapperExecute(ctx, req)
 		if err != nil {
 			resp := a.handle.ResolveError(ctx, err)
@@ -67,7 +90,7 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 			return
 		}
 
-		resp := a.handle.Handle(ctx, http.StatusOK, result, nil)
+		resp := a.handle.Handle(ctx, http.StatusOK, result, nil, nil)
 		a.writeResponse(w, resp)
 	})
 }

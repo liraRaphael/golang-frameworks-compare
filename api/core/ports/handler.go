@@ -15,6 +15,7 @@ type FrameworkAdapter interface {
 
 type Router interface {
 	AddRoute(method string, path string, handler Controller[any, any], meta any)
+	Group(prefix string, middlewares ...Middleware) Router
 	Use(middleware Middleware)
 	Start(addr string) error
 }

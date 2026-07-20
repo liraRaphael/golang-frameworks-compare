@@ -79,10 +79,8 @@ func TestHelloController_WrapperExecute(t *testing.T) {
 		}
 		val := &MockValidator{}
 
-		ctx := context.Background()
-
 		ctrl := NewHelloController(uc, val)
-		req := requests.NewRequestFromParams[any](requests.HelloRequest{Name: "Struct"}, map[string][]string{}, map[string][]string{}, map[string][]string{}, map[string][]string{})
+		req := requests.NewRequestFromParams[any, any](requests.HelloRequest{Name: "Struct"}, nil, nil, nil, nil)
 		res, err := ctrl.WrapperExecute(context.Background(), req)
 
 		assert.NoError(t, err)
@@ -98,7 +96,7 @@ func TestHelloController_WrapperExecute(t *testing.T) {
 		val := &MockValidator{}
 
 		ctrl := NewHelloController(uc, val)
-		req := requests.NewRequestFromParams[any](map[string]any{"name": "Map"}, nil, nil, nil, nil)
+		req := requests.NewRequestFromParams[any, any](map[string]any{"name": "Map"}, nil, nil, nil, nil)
 		res, err := ctrl.WrapperExecute(context.Background(), req)
 
 		assert.NoError(t, err)
@@ -114,7 +112,7 @@ func TestHelloController_WrapperExecute(t *testing.T) {
 		val := &MockValidator{}
 
 		ctrl := NewHelloController(uc, val)
-		req := requests.NewRequestFromParams[any](nil, nil, nil, nil, nil)
+		req := requests.NewRequestFromParams[any, any](nil, nil, nil, nil, nil)
 		res, err := ctrl.WrapperExecute(context.Background(), req)
 
 		assert.NoError(t, err)

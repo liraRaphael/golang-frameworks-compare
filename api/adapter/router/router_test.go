@@ -56,8 +56,8 @@ func TestStandardRouter(t *testing.T) {
 			Description: "Test description",
 		})
 
-		router.Use(func(ctx ports.Context) error { return nil })
-		router.Use(func(ctx ports.Context) error { return nil })
+		router.Use(func(ctx *ports.Context) error { return nil })
+		router.Use(func(ctx *ports.Context) error { return nil })
 
 		err := router.Start(":8080")
 		assert.NoError(t, err)

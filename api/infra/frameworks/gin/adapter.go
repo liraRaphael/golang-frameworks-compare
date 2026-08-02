@@ -43,11 +43,12 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 
 func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
 	a.engine.Handle(method, path, func(c *gin.Context) {
-		ctx, span := a.tracer.Start(c.Request.Context(), "http.request")
+		baseCtx, span := a.tracer.Start(c.Request.Context(), "http.request")
 		defer span.End()
 
-		l := logger.FromContext(ctx)
-		ctx = logger.ToContext(ctx, l)
+		ctx := ports.NewContext(baseCtx)
+		l := ctx.Logger()
+		ctx = ports.NewContext(logger.ToContext(ctx, l))
 
 		l.Info("incoming request", logger.LoggerFieldType{
 			"method":   c.Request.Method,

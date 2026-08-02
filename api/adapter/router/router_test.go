@@ -56,8 +56,8 @@ func TestStandardRouter(t *testing.T) {
 			Description: "Test description",
 		})
 
-		router.Use(func(ctx *ports.Context) {})
-		router.Use(func(ctx *ports.Context) {})
+		router.Use(func(ctx ports.Context) error { return nil })
+		router.Use(func(ctx ports.Context) error { return nil })
 
 		err := router.Start(":8080")
 		assert.NoError(t, err)
@@ -83,7 +83,8 @@ func TestStandardRouter(t *testing.T) {
 	t.Run("with swagger registry integration", func(t *testing.T) {
 		adapter := NewMockFrameworkAdapter()
 		reg := swagger.NewRegistry("Test API", "Test Description", "1.0")
-		router := NewStandardRouter(adapter).(*StandardRouter).WithSwagger(reg)
+		router := NewStandardRouter(adapter)
+		router.WithSwagger(reg)
 
 		ctrl := &DummyController{}
 		meta := swagger.RouteMetadata{
@@ -100,6 +101,6 @@ func TestStandardRouter(t *testing.T) {
 
 		// Verification that routes were added to swagger registry
 		// Since swagger Registry doesn't expose easy getters, we just verify it compiled and ran
-		assert.NotNil(t, router.swagger)
+		assert.NotNil(t, router.(*StandardRouter).swagger)
 	})
 }

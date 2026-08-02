@@ -11,6 +11,7 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/enums"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
+	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,7 +39,7 @@ func TestFastHttpClient_Do(t *testing.T) {
 
 		client := NewFastHttpClient(5 * time.Second)
 		req := requests.NewRequestFromParams[any, any](nil, nil, nil, nil, nil)
-		resp, err := client.Do(context.Background(), enums.MethodGet, server.URL, req)
+		resp, err := client.Do(ports.NewContext(context.Background()), enums.MethodGet, server.URL, req)
 
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, resp.StatusCode())
@@ -69,7 +70,7 @@ func TestFastHttpClient_Do(t *testing.T) {
 
 		client := NewFastHttpClient(5 * time.Second)
 		req := mockRequest{body: requestBody, headers: headers}
-		resp, err := client.Do(context.Background(), enums.MethodPost, server.URL, req)
+		resp, err := client.Do(ports.NewContext(context.Background()), enums.MethodPost, server.URL, req)
 
 		assert.NoError(t, err)
 		assert.Equal(t, http.StatusCreated, resp.StatusCode())

@@ -1,3 +1,3 @@
 package ports
 
-type Middleware func(*Context)
+type Middleware func(Context) error

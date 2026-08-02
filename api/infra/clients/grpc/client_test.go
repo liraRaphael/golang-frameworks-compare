@@ -8,6 +8,7 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/core/domain/enums"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
+	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,7 +26,7 @@ func TestGrpcClient(t *testing.T) {
 		}
 
 		req := requests.NewRequestFromParams[any, any](nil, headers, nil, nil, nil)
-		resp, err := client.Do(context.Background(), enums.MethodGet, "some-url", req)
+		resp, err := client.Do(ports.NewContext(context.Background()), enums.MethodGet, "some-url", req)
 
 		assert.Nil(t, resp)
 		assert.Error(t, err)

@@ -109,11 +109,7 @@ func main() {
 	}
 
 	stdRouter := router.NewStandardRouter(fwAdapter)
-
-	// Cast to concrete type to use WithSwagger
-	if r, ok := stdRouter.(*router.StandardRouter); ok {
-		r.WithSwagger(swag)
-	}
+	stdRouter.WithSwagger(swag)
 
 	stdRouter.AddRoute("GET", "/hello", helloWorldController, swagger.NewRouteMetadata().
 		WithSummary("Gera um cumprimento").

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain/errors"
+	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +16,7 @@ type validateTestStruct struct {
 
 func TestPlaygroundValidator_Validate(t *testing.T) {
 	v := NewPlaygroundValidator()
-	ctx := context.Background()
+	ctx := ports.NewContext(context.Background())
 
 	t.Run("valid struct", func(t *testing.T) {
 		input := validateTestStruct{

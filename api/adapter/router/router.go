@@ -23,9 +23,8 @@ func NewStandardRouter(adapter ports.FrameworkAdapter) ports.Router {
 	return &StandardRouter{adapter: adapter}
 }
 
-func (r *StandardRouter) WithSwagger(s *swagger.Registry) *StandardRouter {
+func (r *StandardRouter) WithSwagger(s *swagger.Registry) {
 	r.swagger = s
-	return r
 }
 
 func (r *StandardRouter) AddRoute(method string, path string, handler ports.Controller[any, any], meta any) {

@@ -23,8 +23,10 @@ func NewHelloController(useCase usecases.HelloUseCase, validator ports.Validator
 }
 
 func (c *helloController) Execute(ctx ports.Context, req requests.HelloRequest) (responses.HelloOutput, error) {
-	ctx, span := c.tracer.Start(ctx, "hello-controller.execute")
+	baseCtx, span := c.tracer.Start(ctx, "hello-controller.execute")
 	defer span.End()
+
+	ctx = ports.NewContext(baseCtx)
 
 	if err := c.validator.Validate(ctx, req); err != nil {
 		return responses.HelloOutput{}, err

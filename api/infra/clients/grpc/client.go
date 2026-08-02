@@ -31,7 +31,7 @@ func (c *grpcClient) Do(ctx ports.Context, method enums.HttpMethod, url string, 
 				md.Append(k, val)
 			}
 		}
-		ctx = metadata.NewOutgoingContext(ctx, md)
+		ctx = ports.NewContext(metadata.NewOutgoingContext(ctx, md))
 	}
 
 	return nil, &errors.ClientError{

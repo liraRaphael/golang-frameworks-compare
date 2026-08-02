@@ -44,11 +44,12 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 
 func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
 	a.app.Add(method, path, func(c *fiber.Ctx) error {
-		ctx, span := a.tracer.Start(c.UserContext(), "http.request")
+		baseCtx, span := a.tracer.Start(c.UserContext(), "http.request")
 		defer span.End()
 
-		l := logger.FromContext(ctx)
-		ctx = logger.ToContext(ctx, l)
+		ctx := ports.NewContext(baseCtx)
+		l := ctx.Logger()
+		ctx = ports.NewContext(logger.ToContext(ctx, l))
 
 		l.Info("incoming request", logger.LoggerFieldType{
 			"method":   c.Method(),
@@ -101,7 +102,9 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 }
 
 func (a *adapter) Use(middleware ports.Middleware) {
-	_ = middleware
+	a.app.Use(func(c *fiber.Ctx) error {
+		return nil
+	})
 }
 
 func (a *adapter) Start(addr string) error {

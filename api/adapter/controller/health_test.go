@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
+	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -12,7 +13,7 @@ func TestHealthController_WrapperExecute(t *testing.T) {
 	ctrl := NewHealthController()
 	req := requests.NewRequestFromParams[any, any](nil, nil, nil, nil, nil)
 
-	res, err := ctrl.WrapperExecute(context.Background(), req)
+	res, err := ctrl.WrapperExecute(ports.NewContext(context.Background()), req)
 
 	assert.NoError(t, err)
 	assert.Equal(t, map[string]string{"status": "ok"}, res)

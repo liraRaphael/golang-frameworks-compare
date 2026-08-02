@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
+	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,7 +21,7 @@ func (e *customTestError) Error() string {
 
 func TestStandardHandler_Handle(t *testing.T) {
 	h := NewStandardHandler()
-	ctx := context.Background()
+	ctx := ports.NewContext(context.Background())
 
 	t.Run("success response handling", func(t *testing.T) {
 		output := map[string]string{"result": "ok"}
@@ -35,7 +36,7 @@ func TestStandardHandler_Handle(t *testing.T) {
 		resp := h.Handle(ctx, http.StatusOK, err, nil, nil)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode())
-		
+
 		body, ok := resp.Body().(*responses.ErrorResponse)
 		assert.True(t, ok)
 		assert.Equal(t, "internal_error", body.Code)

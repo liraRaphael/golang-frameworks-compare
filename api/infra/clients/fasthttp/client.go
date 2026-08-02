@@ -1,7 +1,6 @@
 package fasthttp
 
 import (
-	"context"
 	"encoding/json"
 	"time"
 
@@ -27,7 +26,7 @@ func NewFastHttpClient(timeout time.Duration) ports.Client {
 	}
 }
 
-func (c *fastHttpClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
+func (c *fastHttpClient) Do(ctx ports.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
 	fReq := fasthttp.AcquireRequest()
 	fResp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(fReq)

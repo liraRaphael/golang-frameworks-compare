@@ -1,8 +1,6 @@
 package grpc
 
 import (
-	"context"
-
 	"github.com/liraraphael/go-framework-bench/api/core/domain/enums"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
@@ -25,7 +23,7 @@ func NewGrpcClient(target string) (ports.Client, error) {
 	return &grpcClient{conn: conn}, nil
 }
 
-func (c *grpcClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
+func (c *grpcClient) Do(ctx ports.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
 	if req.Headers() != nil {
 		md := metadata.New(nil)
 		for k, v := range req.Headers() {

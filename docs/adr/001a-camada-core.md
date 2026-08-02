@@ -25,7 +25,7 @@ A camada `core` será organizada em subpacotes com responsabilidades claras:
 
 ### Regras
 - Nenhuma dependência de `adapter` ou `infra` é permitida.
-- Todas as operações de negócio devem receber `context.Context`.
+- Todas as operações de negócio devem receber `ports.Context` como contrato de borda, com o `Context` em `core/ports` compondo `context.Context`.
 - Interfaces devem ser pequenas, específicas e fáceis de mockar.
 
 ## Consequências

@@ -1,5 +1,3 @@
 package ports
 
-type (
-	Middleware interface{}
-)
+type Middleware func(*Context)

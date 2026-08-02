@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 	"reflect"
 
@@ -30,7 +29,7 @@ func (h *standardHandler) RegisterByType(err error, fn responses.ErrorResponseFu
 	h.errorTypeHandlers[reflect.TypeOf(err)] = fn
 }
 
-func (h *standardHandler) ResolveError(ctx context.Context, err error) responses.Response[any, any] {
+func (h *standardHandler) ResolveError(ctx ports.Context, err error) responses.Response[any, any] {
 	if fn, ok := h.errorMessageHandlers[err.Error()]; ok {
 		return fn(ctx, err)
 	}
@@ -41,7 +40,7 @@ func (h *standardHandler) ResolveError(ctx context.Context, err error) responses
 	return responses.NewResponse[any, any](responses.NewErrorResponse("internal_error", "Erro interno do servidor não mapeado"), nil, http.StatusInternalServerError)
 }
 
-func (h *standardHandler) Handle(ctx context.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any] {
+func (h *standardHandler) Handle(ctx ports.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any] {
 	if err, ok := output.(error); ok {
 		return h.ResolveError(ctx, err)
 	}

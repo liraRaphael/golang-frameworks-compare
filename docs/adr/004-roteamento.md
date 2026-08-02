@@ -48,7 +48,7 @@ type FrameworkAdapter func(controller YourControllerInterface) FrameworkHandler
 
 ### Wrapper de framework
 - A implementação concreta de `FrameworkAdapter` deve ser extremamente leve e atuar apenas como um tradutor entre o ciclo de vida do framework e o contrato padrão do `Router`.
-- Ela deve lidar com a conversão de `context.Context`, payloads de request/response e eventos de execução do framework, sem conter lógica de negócio, regras de domínio ou persistência.
+- Ela deve lidar com a conversão do contexto nativo do framework para `ports.Context`, além de payloads de request/response e eventos de execução do framework, sem conter lógica de negócio, regras de domínio ou persistência.
 - Cada framework terá um subdiretório próprio em `infra/frameworks/<framework>` para isolar a integração e preservar a compatibilidade com as diferenças de implementação entre Gin, Fiber, Echo e outros.
 
 ### Fluxo de construção

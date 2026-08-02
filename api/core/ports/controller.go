@@ -1,20 +1,18 @@
 package ports
 
 import (
-	"context"
-
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 )
 
 type (
 	Controller[BodyType any, ParamType any] interface {
-		WrapperExecute(ctx context.Context, req requests.Request[any, any]) (any, error)
+		WrapperExecute(ctx Context, req requests.Request[any, any]) (any, error)
 	}
 
 	HelloController interface {
 		Controller[requests.HelloRequest, any]
-		Execute(ctx context.Context, req requests.HelloRequest) (responses.HelloOutput, error)
+		Execute(ctx Context, req requests.HelloRequest) (responses.HelloOutput, error)
 	}
 
 	HealthController interface {

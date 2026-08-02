@@ -12,6 +12,7 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
+	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,20 +20,20 @@ type dummyController struct {
 	fn func(ctx context.Context, req requests.Request[any, any]) (any, error)
 }
 
-func (d *dummyController) WrapperExecute(ctx context.Context, req requests.Request[any, any]) (any, error) {
+func (d *dummyController) WrapperExecute(ctx ports.Context, req requests.Request[any, any]) (any, error) {
 	return d.fn(ctx, req)
 }
 
 type dummyHandler struct{}
 
-func (d *dummyHandler) Handle(ctx context.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any] {
+func (d *dummyHandler) Handle(ctx ports.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any] {
 	return responses.NewResponse[any, any](output, nil, successStatusCode)
 }
 
 func (d *dummyHandler) RegisterByMessage(message string, fn responses.ErrorResponseFuncType) {}
 func (d *dummyHandler) RegisterByType(err error, fn responses.ErrorResponseFuncType)         {}
 
-func (d *dummyHandler) ResolveError(ctx context.Context, err error) responses.Response[any, any] {
+func (d *dummyHandler) ResolveError(ctx ports.Context, err error) responses.Response[any, any] {
 	return responses.NewResponse[any, any](err.Error(), nil, 400)
 }
 

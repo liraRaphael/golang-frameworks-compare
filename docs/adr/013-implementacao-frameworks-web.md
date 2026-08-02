@@ -32,7 +32,7 @@ Cada adaptador deverá implementar a interface de contrato já definida em [api/
 - registro de rotas por método HTTP e path;
 - aplicação de middlewares;
 - inicialização do servidor em um endereço configurável;
-- propagação de contexto de requisição;
+- adaptação do contexto nativo do framework para `ports.Context`;
 - serialização consistente de resposta e status code.
 
 ### Padrão de integração
@@ -66,7 +66,7 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 
 func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller) {
     a.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-        ctx := r.Context()
+        ctx := ports.Context(r.Context())
         result, err := ctrl.WrapperExecute(ctx, requests.NewRequest(...)) // extrair os parâmetros
         if err != nil {
             a.handle.ResolveError(ctx, err)

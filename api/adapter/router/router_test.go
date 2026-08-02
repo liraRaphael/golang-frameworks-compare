@@ -1,7 +1,6 @@
 package router
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -39,7 +38,7 @@ func (m *MockFrameworkAdapter) Start(addr string) error {
 
 type DummyController struct{}
 
-func (d *DummyController) WrapperExecute(ctx context.Context, req requests.Request[any, any]) (any, error) {
+func (d *DummyController) WrapperExecute(ctx ports.Context, req requests.Request[any, any]) (any, error) {
 	return "ok", nil
 }
 
@@ -57,16 +56,14 @@ func TestStandardRouter(t *testing.T) {
 			Description: "Test description",
 		})
 
-		router.Use("dummy-middleware-1")
-		router.Use("dummy-middleware-2")
+		router.Use(func(ctx *ports.Context) {})
+		router.Use(func(ctx *ports.Context) {})
 
 		err := router.Start(":8080")
 		assert.NoError(t, err)
 
 		assert.Equal(t, ":8080", adapter.StartAddr)
 		assert.Len(t, adapter.Middlewares, 2)
-		assert.Equal(t, "dummy-middleware-1", adapter.Middlewares[0])
-		assert.Equal(t, "dummy-middleware-2", adapter.Middlewares[1])
 
 		assert.Len(t, adapter.Routes, 2)
 		assert.Equal(t, ctrl1, adapter.Routes["GET:/hello"])

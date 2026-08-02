@@ -1,8 +1,6 @@
 package validation
 
 import (
-	"context"
-
 	"github.com/go-playground/validator/v10"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -18,7 +16,7 @@ func NewPlaygroundValidator() ports.Validator {
 	}
 }
 
-func (pv *PlaygroundValidator) Validate(ctx context.Context, input any) error {
+func (pv *PlaygroundValidator) Validate(ctx ports.Context, input any) error {
 	err := pv.validate.StructCtx(ctx, input)
 	if err != nil {
 		if validationErrors, ok := err.(validator.ValidationErrors); ok {

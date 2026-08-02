@@ -1,8 +1,6 @@
 package controller
 
 import (
-	"context"
-
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -24,7 +22,7 @@ func NewHelloController(useCase usecases.HelloUseCase, validator ports.Validator
 	}
 }
 
-func (c *helloController) Execute(ctx context.Context, req requests.HelloRequest) (responses.HelloOutput, error) {
+func (c *helloController) Execute(ctx ports.Context, req requests.HelloRequest) (responses.HelloOutput, error) {
 	ctx, span := c.tracer.Start(ctx, "hello-controller.execute")
 	defer span.End()
 
@@ -35,7 +33,7 @@ func (c *helloController) Execute(ctx context.Context, req requests.HelloRequest
 	return c.useCase.Execute(ctx, req)
 }
 
-func (c *helloController) WrapperExecute(ctx context.Context, req requests.Request[any, any]) (any, error) {
+func (c *helloController) WrapperExecute(ctx ports.Context, req requests.Request[any, any]) (any, error) {
 	var body requests.HelloRequest
 
 	// Handle nil or empty body

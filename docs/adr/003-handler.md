@@ -19,7 +19,8 @@ Será criada uma camada de `handler` na pasta `adapter` com responsabilidade ún
 A implementação inicial utilizará a biblioteca padrão `encoding/json` para serializar as respostas padronizadas, mantendo o fluxo simples e compatível com os frameworks comparados. A escolha foi feita para reduzir dependências extras e preservar a neutralidade da camada de handler.
 
 ### Comportamento esperado
-- O handler receberá um `context.Context` e um `result any`.
+- O handler receberá um `ports.Context` e um `result any`.
+- O `ports.Context` é a abstração de borda do domínio e compõe o `context.Context` do Go, permitindo que adaptadores de framework convertam o contexto nativo da requisição em um contrato neutro para a camada de portas.
 - Se `result` for um `error`, o handler identificará o tipo e/ou mensagem do erro e aplicará a estratégia adequada de mapeamento.
 - Se `result` não for um erro, o handler interpretará como sucesso e retornará o payload de resposta já preparado pelo caso de uso ou presenter.
 - A implementação concreta do handler deve ser mantida em `adapter/handler` e consumida pela camada de infraestrutura por meio da interface `ports.Handler`.
@@ -63,10 +64,10 @@ type ErrorResponseFuncType func(ctx context.Context, err error) Response[any, an
 ### Interface do handler
 ```go
 type Handler interface {
-    Handle(ctx context.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any]
+    Handle(ctx ports.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any]
     RegisterByMessage(message string, fn responses.ErrorResponseFuncType)
     RegisterByType(err error, fn responses.ErrorResponseFuncType)
-    ResolveError(ctx context.Context, err error) responses.Response[any, any]
+    ResolveError(ctx ports.Context, err error) responses.Response[any, any]
 }
 ```
 

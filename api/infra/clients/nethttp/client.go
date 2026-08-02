@@ -2,7 +2,6 @@ package nethttp
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -28,7 +27,7 @@ func NewHttpClient(timeout time.Duration) ports.Client {
 	}
 }
 
-func (c *httpClient) Do(ctx context.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
+func (c *httpClient) Do(ctx ports.Context, method enums.HttpMethod, url string, req requests.Request[any, any]) (responses.Response[any, any], error) {
 	var bodyReader io.Reader
 	if req.Body() != nil {
 		b, err := json.Marshal(req.Body())

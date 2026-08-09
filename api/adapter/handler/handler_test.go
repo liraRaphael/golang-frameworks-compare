@@ -1,10 +1,11 @@
 package handler
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"testing"
+
+	"github.com/liraraphael/go-framework-bench/api/infra/context"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -21,7 +22,7 @@ func (e *customTestError) Error() string {
 
 func TestStandardHandler_Handle(t *testing.T) {
 	h := NewStandardHandler()
-	ctx := ports.NewContext(context.Background())
+	ctx := context.Background()
 
 	t.Run("success response handling", func(t *testing.T) {
 		output := map[string]string{"result": "ok"}
@@ -47,7 +48,7 @@ func TestStandardHandler_Handle(t *testing.T) {
 		hCustom := NewStandardHandler()
 		targetErr := errors.New("user not found")
 
-		hCustom.RegisterByMessage("user not found", func(ctx context.Context, err error) responses.Response[any, any] {
+		hCustom.RegisterByMessage("user not found", func(ctx ports.Context, err error) responses.Response[any, any] {
 			return responses.NewResponse[any, any](
 				&responses.ErrorResponse{Code: "not_found", Message: err.Error()},
 				nil,
@@ -68,7 +69,7 @@ func TestStandardHandler_Handle(t *testing.T) {
 		hCustom := NewStandardHandler()
 		targetErr := &customTestError{msg: "some type error"}
 
-		hCustom.RegisterByType(&customTestError{}, func(ctx context.Context, err error) responses.Response[any, any] {
+		hCustom.RegisterByType(&customTestError{}, func(ctx ports.Context, err error) responses.Response[any, any] {
 			return responses.NewResponse[any, any](
 				&responses.ErrorResponse{Code: "conflict_type", Message: err.Error()},
 				nil,

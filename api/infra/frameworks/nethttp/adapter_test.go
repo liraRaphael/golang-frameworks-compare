@@ -30,8 +30,8 @@ func (d *dummyHandler) Handle(ctx ports.Context, successStatusCode int, output a
 	return responses.NewResponse[any, any](output, nil, successStatusCode)
 }
 
-func (d *dummyHandler) RegisterByMessage(message string, fn responses.ErrorResponseFuncType) {}
-func (d *dummyHandler) RegisterByType(err error, fn responses.ErrorResponseFuncType)         {}
+func (d *dummyHandler) RegisterByMessage(message string, fn ports.ErrorResponseFuncType) {}
+func (d *dummyHandler) RegisterByType(err error, fn ports.ErrorResponseFuncType)         {}
 
 func (d *dummyHandler) ResolveError(ctx ports.Context, err error) responses.Response[any, any] {
 	return responses.NewResponse[any, any](err.Error(), nil, 400)

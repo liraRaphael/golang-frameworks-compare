@@ -65,8 +65,8 @@ type ErrorResponseFuncType func(ctx context.Context, err error) Response[any, an
 ```go
 type Handler interface {
     Handle(ctx ports.Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any]
-    RegisterByMessage(message string, fn responses.ErrorResponseFuncType)
-    RegisterByType(err error, fn responses.ErrorResponseFuncType)
+    RegisterByMessage(message string, fn ports.ErrorResponseFuncType)
+    RegisterByType(err error, fn ports.ErrorResponseFuncType)
     ResolveError(ctx ports.Context, err error) responses.Response[any, any]
 }
 ```

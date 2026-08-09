@@ -1,14 +1,11 @@
 package responses
 
 import (
-	"context"
 	"encoding/json"
 	"reflect"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 )
-
-type ErrorResponseFuncType func(ctx context.Context, err error) Response[any, any]
 
 type (
 	Response[BodyType any, ParamType any] interface {

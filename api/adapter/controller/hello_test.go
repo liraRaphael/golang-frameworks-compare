@@ -1,9 +1,10 @@
 package controller
 
 import (
-	"context"
 	"errors"
 	"testing"
+
+	"github.com/liraraphael/go-framework-bench/api/infra/context"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
@@ -49,7 +50,7 @@ func TestHelloController_Execute(t *testing.T) {
 		}
 
 		ctrl := NewHelloController(uc, val)
-		res, err := ctrl.Execute(ports.NewContext(context.Background()), requests.HelloRequest{Name: "Go"})
+		res, err := ctrl.Execute(context.Background(), requests.HelloRequest{Name: "Go"})
 
 		assert.NoError(t, err)
 		assert.Equal(t, responses.HelloOutput{Message: "Hello, Go"}, res)
@@ -65,7 +66,7 @@ func TestHelloController_Execute(t *testing.T) {
 		}
 
 		ctrl := NewHelloController(uc, val)
-		_, err := ctrl.Execute(ports.NewContext(context.Background()), requests.HelloRequest{Name: ""})
+		_, err := ctrl.Execute(context.Background(), requests.HelloRequest{Name: ""})
 
 		assert.ErrorIs(t, err, expectedErr)
 	})
@@ -82,7 +83,7 @@ func TestHelloController_WrapperExecute(t *testing.T) {
 
 		ctrl := NewHelloController(uc, val)
 		req := requests.NewRequestFromParams[any, any](requests.HelloRequest{Name: "Struct"}, nil, nil, nil, nil)
-		res, err := ctrl.WrapperExecute(ports.NewContext(context.Background()), req)
+		res, err := ctrl.WrapperExecute(context.Background(), req)
 
 		assert.NoError(t, err)
 		assert.Equal(t, responses.HelloOutput{Message: "Hello, Struct"}, res)
@@ -98,7 +99,7 @@ func TestHelloController_WrapperExecute(t *testing.T) {
 
 		ctrl := NewHelloController(uc, val)
 		req := requests.NewRequestFromParams[any, any](map[string]any{"name": "Map"}, nil, nil, nil, nil)
-		res, err := ctrl.WrapperExecute(ports.NewContext(context.Background()), req)
+		res, err := ctrl.WrapperExecute(context.Background(), req)
 
 		assert.NoError(t, err)
 		assert.Equal(t, responses.HelloOutput{Message: "Hello, Map"}, res)
@@ -114,7 +115,7 @@ func TestHelloController_WrapperExecute(t *testing.T) {
 
 		ctrl := NewHelloController(uc, val)
 		req := requests.NewRequestFromParams[any, any](nil, nil, nil, nil, nil)
-		res, err := ctrl.WrapperExecute(ports.NewContext(context.Background()), req)
+		res, err := ctrl.WrapperExecute(context.Background(), req)
 
 		assert.NoError(t, err)
 		assert.Equal(t, responses.HelloOutput{Message: "Hello, "}, res)

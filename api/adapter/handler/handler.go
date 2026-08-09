@@ -10,22 +10,22 @@ import (
 )
 
 type standardHandler struct {
-	errorMessageHandlers map[string]responses.ErrorResponseFuncType
-	errorTypeHandlers    map[reflect.Type]responses.ErrorResponseFuncType
+	errorMessageHandlers map[string]ports.ErrorResponseFuncType
+	errorTypeHandlers    map[reflect.Type]ports.ErrorResponseFuncType
 }
 
 func NewStandardHandler() ports.Handler {
 	return &standardHandler{
-		errorMessageHandlers: map[string]responses.ErrorResponseFuncType{},
-		errorTypeHandlers:    map[reflect.Type]responses.ErrorResponseFuncType{},
+		errorMessageHandlers: map[string]ports.ErrorResponseFuncType{},
+		errorTypeHandlers:    map[reflect.Type]ports.ErrorResponseFuncType{},
 	}
 }
 
-func (h *standardHandler) RegisterByMessage(message string, fn responses.ErrorResponseFuncType) {
+func (h *standardHandler) RegisterByMessage(message string, fn ports.ErrorResponseFuncType) {
 	h.errorMessageHandlers[message] = fn
 }
 
-func (h *standardHandler) RegisterByType(err error, fn responses.ErrorResponseFuncType) {
+func (h *standardHandler) RegisterByType(err error, fn ports.ErrorResponseFuncType) {
 	h.errorTypeHandlers[reflect.TypeOf(err)] = fn
 }
 

@@ -6,6 +6,7 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
+	"github.com/liraraphael/go-framework-bench/api/infra/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -31,7 +32,7 @@ func (c *grpcClient) Do(ctx ports.Context, method enums.HttpMethod, url string, 
 				md.Append(k, val)
 			}
 		}
-		ctx = ports.NewContext(metadata.NewOutgoingContext(ctx, md))
+		ctx = context.NewContext(metadata.NewOutgoingContext(ctx, md))
 	}
 
 	return nil, &errors.ClientError{

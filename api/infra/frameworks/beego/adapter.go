@@ -5,10 +5,11 @@ import (
 	"net/http"
 
 	"github.com/beego/beego/v2/server/web"
-	"github.com/beego/beego/v2/server/web/context"
+	bctx "github.com/beego/beego/v2/server/web/context"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
+	"github.com/liraraphael/go-framework-bench/api/infra/context"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/logger"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
@@ -42,13 +43,13 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 }
 
 func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
-	handler := func(ctx *context.Context) {
+	handler := func(ctx *bctx.Context) {
 		baseCtx, span := a.tracer.Start(ctx.Request.Context(), "http.request")
 		defer span.End()
 
-		rCtx := ports.NewContext(baseCtx)
+		rCtx := context.NewContext(baseCtx)
 		l := rCtx.Logger()
-		rCtx = ports.NewContext(logger.ToContext(rCtx, l))
+		rCtx = context.NewContext(logger.ToContext(rCtx, l))
 
 		l.Info("incoming request", logger.LoggerFieldType{
 			"method":   ctx.Request.Method,
@@ -117,7 +118,7 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 	}
 }
 
-func (a *adapter) writeResponse(ctx *context.Context, resp any) {
+func (a *adapter) writeResponse(ctx *bctx.Context, resp any) {
 	ctx.Output.Header("Content-Type", "application/json")
 	b, _ := json.Marshal(resp)
 	_ = ctx.Output.Body(b)

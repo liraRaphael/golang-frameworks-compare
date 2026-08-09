@@ -5,6 +5,7 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/liraraphael/go-framework-bench/api/core/usecases"
+	"github.com/liraraphael/go-framework-bench/api/infra/context"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
 
@@ -26,7 +27,7 @@ func (c *helloController) Execute(ctx ports.Context, req requests.HelloRequest) 
 	baseCtx, span := c.tracer.Start(ctx, "hello-controller.execute")
 	defer span.End()
 
-	ctx = ports.NewContext(baseCtx)
+	ctx = context.NewContext(baseCtx)
 
 	if err := c.validator.Validate(ctx, req); err != nil {
 		return responses.HelloOutput{}, err

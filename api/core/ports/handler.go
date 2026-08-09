@@ -22,7 +22,7 @@ type Router interface {
 
 type Handler interface {
 	Handle(ctx Context, successStatusCode int, output any, headers domain.HttpParamsType, cookies domain.HttpParamsType) responses.Response[any, any]
-	RegisterByMessage(message string, fn responses.ErrorResponseFuncType)
-	RegisterByType(err error, fn responses.ErrorResponseFuncType)
+	RegisterByMessage(message string, fn ErrorResponseFuncType)
+	RegisterByType(err error, fn ErrorResponseFuncType)
 	ResolveError(ctx Context, err error) responses.Response[any, any]
 }

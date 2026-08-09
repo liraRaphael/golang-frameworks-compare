@@ -7,6 +7,7 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
+	"github.com/liraraphael/go-framework-bench/api/infra/context"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/logger"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
@@ -48,9 +49,9 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 		baseCtx, span := a.tracer.Start(r.Context(), "http.request")
 		defer span.End()
 
-		ctx := ports.NewContext(baseCtx)
+		ctx := context.NewContext(baseCtx)
 		l := ctx.Logger()
-		ctx = ports.NewContext(logger.ToContext(ctx, l))
+		ctx = context.NewContext(logger.ToContext(ctx, l))
 
 		l.Info("incoming request", logger.LoggerFieldType{
 			"method":   r.Method,

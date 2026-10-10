@@ -6,16 +6,15 @@ import (
 )
 
 type (
-	Controller[BodyType any, ParamType any] interface {
-		WrapperExecute(ctx Context, req requests.Request[any, any]) (any, error)
+	Controller[InputBodyType, InputParamType, OutputBodyType, OutputParamType any] interface {
+		Execute(ctx Context, req requests.Request[InputBodyType, InputParamType]) (responses.Response[OutputBodyType, OutputParamType], error)
 	}
 
 	HelloController interface {
-		Controller[requests.HelloRequest, any]
-		Execute(ctx Context, req requests.HelloRequest) (responses.HelloOutput, error)
+		Controller[requests.HelloRequest, any, responses.HelloOutput, any]
 	}
 
 	HealthController interface {
-		Controller[any, any]
+		Controller[any, any, any, any]
 	}
 )

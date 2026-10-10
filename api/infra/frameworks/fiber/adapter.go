@@ -7,8 +7,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
+	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/liraraphael/go-framework-bench/api/infra/context"
+	"github.com/liraraphael/go-framework-bench/api/infra/frameworks"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/logger"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
@@ -43,7 +45,7 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 	}
 }
 
-func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
+func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any, any, any]) {
 	a.app.Add(method, path, func(c *fiber.Ctx) error {
 		baseCtx, span := a.tracer.Start(c.UserContext(), "http.request")
 		defer span.End()
@@ -62,7 +64,7 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 		if len(c.Body()) > 0 {
 			if err := json.Unmarshal(c.Body(), &body); err != nil {
 				resp := a.handle.ResolveError(ctx, err)
-				return c.Status(http.StatusOK).JSON(resp)
+				return a.writeResponse(ctx, c, resp)
 			}
 		}
 
@@ -83,23 +85,53 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 			pathParams[k] = domain.HttpParamType{v}
 		}
 
-		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, pathParams, nil)
+		cookies := domain.HttpParamsType{}
+		c.Request().Header.VisitAllCookie(func(key, value []byte) {
+			name := string(key)
+			cookies[name] = append(cookies[name], string(value))
+		})
+		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, pathParams, cookies)
 		req := requestWrapper{
 			Request:     rawReq,
 			headers:     headers,
 			queryParams: query,
 			pathParams:  pathParams,
+			cookies:     cookies,
 		}
 
-		result, err := ctrl.WrapperExecute(ctx, req)
+		result, err := ctrl.Execute(ctx, req)
 		if err != nil {
 			resp := a.handle.ResolveError(ctx, err)
-			return c.Status(http.StatusOK).JSON(resp)
+			return a.writeResponse(ctx, c, resp)
 		}
 
-		resp := a.handle.Handle(ctx, http.StatusOK, result, nil, nil)
-		return c.Status(http.StatusOK).JSON(resp)
+		return a.writeResponse(ctx, c, result)
 	})
+}
+
+func (a *adapter) writeResponse(ctx ports.Context, c *fiber.Ctx, resp responses.Response[any, any]) error {
+	b, err := frameworks.MarshalResponse(resp)
+	if err != nil {
+		ctx.Logger().Error("failed to encode response", err, nil)
+		return c.SendStatus(http.StatusInternalServerError)
+	}
+	for name, values := range resp.Headers() {
+		if len(values) == 0 {
+			continue
+		}
+		c.Set(name, values[0])
+		for _, value := range values[1:] {
+			c.Append(name, value)
+		}
+	}
+	for name, values := range resp.Cookies() {
+		for _, value := range values {
+			c.Append(fiber.HeaderSetCookie, (&http.Cookie{Name: name, Value: value}).String())
+		}
+	}
+	c.Status(resp.StatusCode())
+	c.Set(fiber.HeaderContentType, "application/json")
+	return c.Send(b)
 }
 
 func (a *adapter) Use(middleware ports.Middleware) {

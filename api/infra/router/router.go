@@ -15,7 +15,7 @@ type StandardRouter struct {
 type routeRegistration struct {
 	method  string
 	path    string
-	handler ports.Controller[any, any]
+	handler ports.Controller[any, any, any, any]
 	meta    swagger.RouteMetadata
 }
 
@@ -27,7 +27,7 @@ func (r *StandardRouter) WithSwagger(s *swagger.Registry) {
 	r.swagger = s
 }
 
-func (r *StandardRouter) AddRoute(method string, path string, handler ports.Controller[any, any], meta any) {
+func (r *StandardRouter) AddRoute(method string, path string, handler ports.Controller[any, any, any, any], meta any) {
 	var sMeta swagger.RouteMetadata
 	if m, ok := meta.(swagger.RouteMetadata); ok {
 		sMeta = m

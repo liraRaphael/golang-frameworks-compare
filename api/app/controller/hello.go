@@ -23,33 +23,30 @@ func NewHelloController(useCase usecases.HelloUseCase, validator ports.Validator
 	}
 }
 
-func (c *helloController) Execute(ctx ports.Context, req requests.HelloRequest) (responses.HelloOutput, error) {
+func (c *helloController) Execute(ctx ports.Context, req requests.Request[requests.HelloRequest, any]) (responses.Response[responses.HelloOutput, any], error) {
 	baseCtx, span := c.tracer.Start(ctx, "hello-controller.execute")
 	defer span.End()
+
+	responser := c.newResponser()
 
 	ctx = context.NewContext(baseCtx)
 
 	if err := c.validator.Validate(ctx, req); err != nil {
-		return responses.HelloOutput{}, err
+		return responser, err
 	}
 
-	return c.useCase.Execute(ctx, req)
+	ex, err := c.useCase.Execute(ctx, req.Body())
+	if err != nil {
+		return responser, err
+	}
+
+	return c.newResponserBody(ex), nil
 }
 
-func (c *helloController) WrapperExecute(ctx ports.Context, req requests.Request[any, any]) (any, error) {
-	var body requests.HelloRequest
+func (c *helloController) newResponserBody(b responses.HelloOutput) responses.Response[responses.HelloOutput, any] {
+	return responses.NewResponse(b, interface{}(nil), 200)
+}
 
-	// Handle nil or empty body
-	if req.Body() != nil {
-		if b, ok := req.Body().(requests.HelloRequest); ok {
-			body = b
-		} else if m, ok := req.Body().(map[string]any); ok {
-			// Basic conversion for generic input
-			if name, ok := m["name"].(string); ok {
-				body.Name = name
-			}
-		}
-	}
-
-	return c.Execute(ctx, body)
+func (c *helloController) newResponser() responses.Response[responses.HelloOutput, any] {
+	return c.newResponserBody(responses.HelloOutput{})
 }

@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/liraraphael/go-framework-bench/api/adapter/controller"
-	"github.com/liraraphael/go-framework-bench/api/adapter/handler"
-	"github.com/liraraphael/go-framework-bench/api/adapter/presenter"
-	"github.com/liraraphael/go-framework-bench/api/adapter/router"
-	"github.com/liraraphael/go-framework-bench/api/adapter/validation"
+	"github.com/liraraphael/go-framework-bench/api/app/controller"
+	"github.com/liraraphael/go-framework-bench/api/app/handler"
+	"github.com/liraraphael/go-framework-bench/api/app/presenter"
+	"github.com/liraraphael/go-framework-bench/api/app/validation"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -26,6 +25,7 @@ import (
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/logger"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/metrics"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
+	"github.com/liraraphael/go-framework-bench/api/infra/router"
 )
 
 func main() {
@@ -111,18 +111,24 @@ func main() {
 	stdRouter := router.NewStandardRouter(fwAdapter)
 	stdRouter.WithSwagger(swag)
 
-	stdRouter.AddRoute("GET", "/hello", helloWorldController, swagger.NewRouteMetadata().
-		WithSummary("Gera um cumprimento").
-		WithDescription("Retorna uma mensagem de hello baseada no nome fornecido").
-		WithTags("Greetings").
-		WithInput(new(requests.HelloRequest)).
-		WithOutput(new(responses.HelloOutput)))
-
 	stdRouter.AddRoute("GET", "/health", healthController, swagger.NewRouteMetadata().
 		WithSummary("Verifica a saúde da aplicação").
 		WithDescription("Retorna o status atual da aplicação").
 		WithTags("Health").
 		WithOutput(new(map[string]string{"status": "ok"})))
+
+	router.AddTypedRoute(
+		stdRouter,
+		"GET",
+		"/hello",
+		helloWorldController,
+		swagger.NewRouteMetadata().
+			WithSummary("Gera um cumprimento").
+			WithDescription("Retorna uma mensagem de hello baseada no nome fornecido").
+			WithTags("Greetings").
+			WithInput(new(requests.HelloRequest)).
+			WithOutput(new(responses.HelloOutput)),
+	)
 
 	swag.StartSwaggerUI(fmt.Sprintf(":%s", cfg.SwaggerPort))
 

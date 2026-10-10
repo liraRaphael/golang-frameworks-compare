@@ -7,8 +7,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
+	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/liraraphael/go-framework-bench/api/infra/context"
+	"github.com/liraraphael/go-framework-bench/api/infra/frameworks"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/logger"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
@@ -42,7 +44,7 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 	}
 }
 
-func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
+func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any, any, any]) {
 	a.engine.Handle(method, path, func(c *gin.Context) {
 		baseCtx, span := a.tracer.Start(c.Request.Context(), "http.request")
 		defer span.End()
@@ -61,7 +63,7 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 		if c.Request.ContentLength > 0 {
 			if err := c.ShouldBindJSON(&body); err != nil && err != io.EOF {
 				resp := a.handle.ResolveError(ctx, err)
-				c.JSON(http.StatusOK, resp)
+				a.writeResponse(ctx, c, resp)
 				return
 			}
 		}
@@ -76,29 +78,41 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 			query[k] = domain.HttpParamType(v)
 		}
 
+		cookies := frameworks.ParseCookies(c.Request.Header.Get("Cookie"))
 		pathParams := domain.HttpParamsType{}
 		for _, param := range c.Params {
 			pathParams[param.Key] = domain.HttpParamType{param.Value}
 		}
 
-		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, pathParams, nil)
+		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, pathParams, cookies)
 		req := requestWrapper{
 			Request:     rawReq,
 			headers:     headers,
 			queryParams: query,
 			pathParams:  pathParams,
+			cookies:     cookies,
 		}
 
-		result, err := ctrl.WrapperExecute(ctx, req)
+		result, err := ctrl.Execute(ctx, req)
 		if err != nil {
 			resp := a.handle.ResolveError(ctx, err)
-			c.JSON(http.StatusOK, resp)
+			a.writeResponse(ctx, c, resp)
 			return
 		}
 
-		resp := a.handle.Handle(ctx, http.StatusOK, result, nil, nil)
-		c.JSON(http.StatusOK, resp)
+		a.writeResponse(ctx, c, result)
 	})
+}
+
+func (a *adapter) writeResponse(ctx ports.Context, c *gin.Context, resp responses.Response[any, any]) {
+	b, err := frameworks.MarshalResponse(resp)
+	if err != nil {
+		ctx.Logger().Error("failed to encode response", err, nil)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	frameworks.SetResponseHeaders(c.Writer.Header(), resp)
+	c.Data(resp.StatusCode(), "application/json", b)
 }
 
 func (a *adapter) Use(middleware ports.Middleware) {

@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
+	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/liraraphael/go-framework-bench/api/infra/docs/swagger"
 	"github.com/stretchr/testify/assert"
 )
 
 type MockFrameworkAdapter struct {
-	Routes      map[string]ports.Controller[any, any]
+	Routes      map[string]ports.Controller[any, any, any, any]
 	Middlewares []ports.Middleware
 	StartAddr   string
 	StartErr    error
@@ -19,11 +20,11 @@ type MockFrameworkAdapter struct {
 
 func NewMockFrameworkAdapter() *MockFrameworkAdapter {
 	return &MockFrameworkAdapter{
-		Routes: make(map[string]ports.Controller[any, any]),
+		Routes: make(map[string]ports.Controller[any, any, any, any]),
 	}
 }
 
-func (m *MockFrameworkAdapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
+func (m *MockFrameworkAdapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any, any, any]) {
 	m.Routes[method+":"+path] = ctrl
 }
 
@@ -38,8 +39,8 @@ func (m *MockFrameworkAdapter) Start(addr string) error {
 
 type DummyController struct{}
 
-func (d *DummyController) WrapperExecute(ctx ports.Context, req requests.Request[any, any]) (any, error) {
-	return "ok", nil
+func (d *DummyController) Execute(ctx ports.Context, req requests.Request[any, any]) (responses.Response[any, any], error) {
+	return responses.NewResponse[any, any]("ok", nil, 200), nil
 }
 
 func TestStandardRouter(t *testing.T) {

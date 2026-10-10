@@ -7,7 +7,7 @@ import (
 )
 
 type FrameworkAdapter interface {
-	RegisterRoute(method string, path string, ctrl Controller[any, any])
+	RegisterRoute(method string, path string, ctrl Controller[any, any, any, any])
 	Use(middleware Middleware)
 	Start(addr string) error
 }
@@ -15,7 +15,7 @@ type FrameworkAdapter interface {
 type Router interface {
 	WithSwagger(s *swagger.Registry)
 
-	AddRoute(method string, path string, handler Controller[any, any], meta any)
+	AddRoute(method string, path string, handler Controller[any, any, any, any], meta any)
 	Use(middleware Middleware)
 	Start(addr string) error
 }

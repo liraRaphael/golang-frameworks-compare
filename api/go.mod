@@ -1,6 +1,6 @@
 module github.com/liraraphael/go-framework-bench/api
 
-go 1.26.4
+go 1.27.2
 
 require (
 	github.com/beego/beego/v2 v2.3.10

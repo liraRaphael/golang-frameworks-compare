@@ -6,8 +6,10 @@ import (
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
+	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/liraraphael/go-framework-bench/api/infra/context"
+	"github.com/liraraphael/go-framework-bench/api/infra/frameworks"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/logger"
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/tracing"
 )
@@ -39,7 +41,7 @@ func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
 	}
 }
 
-func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any]) {
+func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller[any, any, any, any]) {
 	a.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != method {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -63,7 +65,7 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 		if r.ContentLength > 0 {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				resp := a.handle.ResolveError(ctx, err)
-				a.writeResponse(w, resp)
+				a.writeResponse(ctx, w, resp)
 				return
 			}
 		}
@@ -78,29 +80,39 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 			query[k] = domain.HttpParamType(v)
 		}
 
-		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, nil, nil)
+		cookies := frameworks.ParseCookies(r.Header.Get("Cookie"))
+		rawReq := requests.NewRequestFromParams[any, any](body, headers, query, nil, cookies)
 		req := requestWrapper{
 			Request:     rawReq,
 			headers:     headers,
 			queryParams: query,
+			cookies:     cookies,
 		}
 
-		result, err := ctrl.WrapperExecute(ctx, req)
+		result, err := ctrl.Execute(ctx, req)
 		if err != nil {
 			resp := a.handle.ResolveError(ctx, err)
-			a.writeResponse(w, resp)
+			a.writeResponse(ctx, w, resp)
 			return
 		}
 
-		resp := a.handle.Handle(ctx, http.StatusOK, result, nil, nil)
-		a.writeResponse(w, resp)
+		a.writeResponse(ctx, w, result)
 	})
 }
 
-func (a *adapter) writeResponse(w http.ResponseWriter, resp any) {
+func (a *adapter) writeResponse(ctx ports.Context, w http.ResponseWriter, resp responses.Response[any, any]) {
+	b, err := frameworks.MarshalResponse(resp)
+	if err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		ctx.Logger().Error("failed to encode response", err, nil)
+		return
+	}
+	frameworks.SetResponseHeaders(w.Header(), resp)
 	w.Header().Set("Content-Type", "application/json")
-	b, _ := json.Marshal(resp)
-	w.Write(b)
+	w.WriteHeader(resp.StatusCode())
+	if _, err := w.Write(b); err != nil {
+		ctx.Logger().Error("failed to write response", err, nil)
+	}
 }
 
 func (a *adapter) Use(middleware ports.Middleware) {

@@ -14,11 +14,20 @@ import (
 )
 
 type dummyController struct {
-	fn func(ctx ports.Context, req requests.Request[any, any]) (any, error)
+	fn         func(ctx ports.Context, req requests.Request[any, any]) (any, error)
+	statusCode int
 }
 
-func (d *dummyController) WrapperExecute(ctx ports.Context, req requests.Request[any, any]) (any, error) {
-	return d.fn(ctx, req)
+func (d *dummyController) Execute(ctx ports.Context, req requests.Request[any, any]) (responses.Response[any, any], error) {
+	output, err := d.fn(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	statusCode := d.statusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	return responses.NewResponse[any, any](output, nil, statusCode), nil
 }
 
 type dummyHandler struct{}
@@ -37,7 +46,9 @@ func TestGinAdapter(t *testing.T) {
 	adapter := NewAdapter(dh).(*adapter)
 
 	ctrl := &dummyController{
+		statusCode: http.StatusCreated,
 		fn: func(ctx ports.Context, req requests.Request[any, any]) (any, error) {
+			assert.Equal(t, []string{"abc"}, req.Cookies().GetValues("session"))
 			values := req.PathParams().GetValues("id")
 			var param string
 			if len(values) > 0 {
@@ -50,11 +61,12 @@ func TestGinAdapter(t *testing.T) {
 	adapter.RegisterRoute("GET", "/test/:id", ctrl)
 
 	req := httptest.NewRequest("GET", "/test/123", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: "abc"})
 	w := httptest.NewRecorder()
 
 	adapter.engine.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusCreated, w.Code)
 
 	var resp struct {
 		Body       map[string]string `json:"Body"`
@@ -62,6 +74,6 @@ func TestGinAdapter(t *testing.T) {
 	}
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.NoError(t, err)
-	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	assert.Equal(t, "123", resp.Body["id"])
 }

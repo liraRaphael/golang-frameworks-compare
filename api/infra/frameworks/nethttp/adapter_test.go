@@ -2,7 +2,6 @@ package nethttp
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,11 +16,20 @@ import (
 )
 
 type dummyController struct {
-	fn func(ctx context.Context, req requests.Request[any, any]) (any, error)
+	fn         func(ctx ports.Context, req requests.Request[any, any]) (any, error)
+	statusCode int
 }
 
-func (d *dummyController) WrapperExecute(ctx ports.Context, req requests.Request[any, any]) (any, error) {
-	return d.fn(ctx, req)
+func (d *dummyController) Execute(ctx ports.Context, req requests.Request[any, any]) (responses.Response[any, any], error) {
+	output, err := d.fn(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	statusCode := d.statusCode
+	if statusCode == 0 {
+		statusCode = http.StatusOK
+	}
+	return responses.NewResponse[any, any](output, nil, statusCode), nil
 }
 
 type dummyHandler struct{}
@@ -43,7 +51,9 @@ func TestNetHttpAdapter(t *testing.T) {
 
 	t.Run("successful GET request", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
+			statusCode: http.StatusCreated,
+			fn: func(ctx ports.Context, req requests.Request[any, any]) (any, error) {
+				assert.Equal(t, []string{"abc"}, req.Cookies().GetValues("session"))
 				return map[string]string{"message": "success"}, nil
 			},
 		}
@@ -51,11 +61,12 @@ func TestNetHttpAdapter(t *testing.T) {
 		adapter.RegisterRoute("GET", "/test-get", ctrl)
 
 		req := httptest.NewRequest("GET", "/test-get", nil)
+		req.AddCookie(&http.Cookie{Name: "session", Value: "abc"})
 		w := httptest.NewRecorder()
 
 		adapter.mux.ServeHTTP(w, req)
 
-		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, http.StatusCreated, w.Code)
 
 		var resp struct {
 			Body       map[string]string `json:"Body"`
@@ -63,13 +74,13 @@ func TestNetHttpAdapter(t *testing.T) {
 		}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.NoError(t, err)
-		assert.Equal(t, 200, resp.StatusCode)
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, "success", resp.Body["message"])
 	})
 
 	t.Run("method not allowed", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
+			fn: func(ctx ports.Context, req requests.Request[any, any]) (any, error) {
 				return "ok", nil
 			},
 		}
@@ -86,7 +97,7 @@ func TestNetHttpAdapter(t *testing.T) {
 
 	t.Run("controller error handling", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
+			fn: func(ctx ports.Context, req requests.Request[any, any]) (any, error) {
 				return nil, errors.New("something went wrong")
 			},
 		}
@@ -104,13 +115,14 @@ func TestNetHttpAdapter(t *testing.T) {
 		}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Equal(t, 400, resp.StatusCode)
 		assert.Equal(t, "something went wrong", resp.Body)
 	})
 
 	t.Run("with JSON body parsing", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
+			fn: func(ctx ports.Context, req requests.Request[any, any]) (any, error) {
 				bodyMap, ok := req.Body().(map[string]any)
 				if !ok {
 					return nil, errors.New("invalid body format")
@@ -142,7 +154,7 @@ func TestNetHttpAdapter(t *testing.T) {
 
 	t.Run("invalid JSON body parsing", func(t *testing.T) {
 		ctrl := &dummyController{
-			fn: func(ctx context.Context, req requests.Request[any, any]) (any, error) {
+			fn: func(ctx ports.Context, req requests.Request[any, any]) (any, error) {
 				return "ok", nil
 			},
 		}
@@ -160,6 +172,7 @@ func TestNetHttpAdapter(t *testing.T) {
 		}
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		assert.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.Equal(t, 400, resp.StatusCode)
 		assert.Contains(t, resp.Body, "invalid character")
 	})

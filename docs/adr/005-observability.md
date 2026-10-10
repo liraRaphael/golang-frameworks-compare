@@ -4,35 +4,34 @@
 
 **Data**: 2026-06-24
 
-**Tags**: [logs, otel, observability, metrics, tracing, jaeger, prometheus, grafana]
+**Tags**: [logs, otel, observability, metrics, tracing]
 
 ## Pré-requisito
 - [ADR-001: Estrutura da aplicação](./001-estrutura-app.md)
 
 ## Contexto
-Para comparar frameworks com dados confiáveis, é necessário instrumentar a aplicação com logs, métricas e tracing. Essa camada deve permitir identificar gargalos de CPU, latência, uso de memória e erros de execução, sem depender do framework web escolhido.
+`api/main.go` inicializa logger, tracing e métricas antes de montar o router. A infraestrutura exporta traces e métricas por OTLP HTTP; não há instrumentação de métricas de requisição, CPU ou memória implementada nos adapters atuais.
 
 ## Decisão
 Será criada uma camada de observabilidade em `infra` para coleta de logs, métricas e traces, com foco em comparação entre frameworks.
 
 ### Logs
 - Uso de `go.uber.org/zap` para geração de logs estruturados.
-- Cada log deve incluir timestamp, nível, mensagem, request ID, trace ID, nome do componente e duração da operação.
-- O contexto da requisição deve carregar identificadores de trace e duração inicial.
+- O logger concreto usa `zap.NewProduction` e oferece níveis Info, Error, Fatal, Warn e Debug.
+- Os adapters registram method, path e trace ID em `incoming request`. Não há request ID ou duração registrados por padrão.
+- `ports.Context` oferece um logger e acesso ao trace ID via `infra/context`.
 
 ### Tracing
 - Uso de `github.com/open-telemetry/opentelemetry-go`.
-- A aplicação deve criar spans para operação principal, chamadas externas, persistência e tratamento de erros.
-- Atributos-chave devem ser registrados para facilitar análise em Jaeger/Tempo/OTLP.
+- Os adapters HTTP criam um span `http.request`; o controller de Hello cria `hello-controller.execute`.
+- O tracer configura OTLP HTTP, propagação TraceContext/Baggage e sampler `AlwaysSample`. Chamadas externas e persistência não estão instrumentadas no fluxo presente.
 
 ### Métricas
-- Exposição de métricas de requisição, latência, erros e throughput.
-- Integração com Prometheus/Grafana deve ser prevista.
-- Métricas devem ser coletadas em pontos estratégicos do fluxo HTTP e das operações de negócios.
+- `infra/observability/metrics` configura um exporter OTLP HTTP e um MeterProvider com exportação periódica.
+- Atualmente não há instrumentos nem middleware de métricas definidos; não há endpoint Prometheus/Grafana no código da API.
 
 ### Regras
-- A observabilidade deve ser implementada em `infra` e consumida por `adapter` e `core` por meio de abstrações.
-- O `core` não deve depender diretamente de bibliotecas de logging ou tracing.
+- Logger, tracing e métricas são inicializados no bootstrap. `core/ports.Context` referencia diretamente o logger da infraestrutura e o tipo `trace.Span`.
 
 ## Consequências
 - Facilita análise de desempenho e diagnósticos.

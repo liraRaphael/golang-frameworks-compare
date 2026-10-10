@@ -14,19 +14,15 @@
 Diferentes frameworks e integrações podem demandar configurações distintas, mas a aplicação precisa de uma fonte única de verdade para variáveis de ambiente. Sem um padrão claro, os benchmarks podem sofrer variações por diferenças invisíveis nas configurações carregadas em cada execução.
 
 ## Decisão
-Utilizaremos a biblioteca `envconfig` para carregar configurações a partir de variáveis de ambiente. As configurações devem ser centralizadas na camada `infra/config` e injetadas durante o bootstrap da aplicação.
+`infra/config.AppConfig` centraliza as configurações carregadas com `envconfig`. O pacote processa a configuração em `init`; `main.go` obtém uma cópia por `NewAppConfig`.
 
 ### Padrão adotado
-- O projeto deve manter um arquivo `.env.example` na raiz, descrevendo todas as variáveis esperadas.
-- A leitura de configuração deve ocorrer em um único ponto de entrada da aplicação.
-- Os valores devem ser tipados e validados no início da inicialização, evitando falhas silenciosas durante a execução.
-- Os componentes devem receber suas configurações por construtor, preservando o padrão de injeção de dependência.
-- Cada trecho que necessitar de config, deverá ter seu arquivo com sua struct global inicializada com métodos proprios
-  - Ex: `config/fiber.go`, `config/gin.go`, `config.client_grpc.go` e assim por seguinte
-- Um arquivo `config.go` com a função `func init()` onde deverá ser carregado e registrado os valores
+- `envconfig.Process("APP", &appConfig)` usa o prefixo `APP_`; o erro do processamento é atualmente ignorado.
+- As variáveis efetivas usam o prefixo `APP_`: `APP_PORT` (8080), `APP_PPROF_PORT` (8081), `APP_SWAGGER_PORT` (8082), `APP_OTEL_EXPORTER_OTLP_ENDPOINT` (`localhost:4318`), `APP_SERVICE_NAME` (`go-framework-bench`) e `APP_FRAMEWORK` (`nethttp`).
+- A API não carrega arquivos `.env` nem declara `config` por framework/cliente. A configuração é lida globalmente no pacote e consumida do bootstrap.
 
 ## Consequências
-- O ambiente de benchmark passa a ser mais consistente e reproduzível entre os frameworks.
+- A centralização e os defaults atuais facilitam configurar a inicialização; como o erro do carregamento é descartado, a validação de configuração ainda não é garantida.
 - A configuração fica explícita, documentada e fácil de trocar entre ambientes.
 - O processo de setup da aplicação se torna mais simples para desenvolvedores e automações.
 

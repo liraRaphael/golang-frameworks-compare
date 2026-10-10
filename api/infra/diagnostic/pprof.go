@@ -3,6 +3,7 @@ package diagnostic
 import (
 	"net/http"
 	_ "net/http/pprof"
+
 	"github.com/liraraphael/go-framework-bench/api/infra/observability/logger"
 )
 

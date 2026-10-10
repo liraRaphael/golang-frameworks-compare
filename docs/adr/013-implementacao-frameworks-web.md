@@ -13,103 +13,75 @@
 - [ADR-010: Injeção de Dependência](010-injecao-dependencia.md)
 
 ## Contexto
-O projeto já possui uma implementação inicial de adaptador para o pacote padrão do Go em [api/infra/frameworks/nethttp/adapter.go](../../api/infra/frameworks/nethttp/adapter.go), mas o [readme.md](../../readme.md) define uma lista explícita de frameworks a serem avaliados: Gin, Fiber, Echo, Chi e Beego.
+`api/infra/frameworks` contém adapters para Gin, Fiber, Echo, Chi, Beego e também net/http. O bootstrap seleciona um deles conforme `FRAMEWORK`, usando net/http para valor ausente ou não reconhecido.
 
-Para que a comparação entre os frameworks seja justa e reproduzível, a aplicação precisa suportar cada um deles por meio de adaptadores concretos que exponham o mesmo contrato de roteamento, middleware e inicialização. Sem essa padronização, cada implementação acabaria se desviando em detalhes de integração, o que comprometeria a comparabilidade dos benchmarks e dificultaria a manutenção do código.
+Os adapters implementam um contrato comum de registro de rota e inicialização, mas não uniformizam todos os comportamentos. As diferenças efetivas estão registradas nesta ADR e devem ser consideradas em qualquer comparação entre frameworks.
 
 ## Decisão
-Serão implementados adaptadores concretos para os frameworks listados no README, cada um encapsulando a integração específica com o framework sem alterar a lógica de negócio da aplicação.
+Estão implementados adapters concretos para os frameworks listados nesta ADR, cada um encapsulando a integração específica sem alterar a lógica de negócio.
 
 ### Escopo da implementação
-Os seguintes pacotes serão adicionados em [api/infra/frameworks](../../api/infra/frameworks):
+Os seguintes pacotes existem em [api/infra/frameworks](../../api/infra/frameworks):
 - [api/infra/frameworks/gin](../../api/infra/frameworks/gin)
 - [api/infra/frameworks/fiber](../../api/infra/frameworks/fiber)
 - [api/infra/frameworks/echo](../../api/infra/frameworks/echo)
 - [api/infra/frameworks/chi](../../api/infra/frameworks/chi)
 - [api/infra/frameworks/beego](../../api/infra/frameworks/beego)
+- [api/infra/frameworks/nethttp](../../api/infra/frameworks/nethttp)
 
-Cada adaptador deverá implementar a interface de contrato já definida em [api/core/ports/handler.go](../../api/core/ports/handler.go), com suporte mínimo para:
+Cada adapter implementa `ports.FrameworkAdapter`, declarado em [api/core/ports/presenter.go](../../api/core/ports/presenter.go), com estas operações:
 - registro de rotas por método HTTP e path;
-- aplicação de middlewares;
+- encaminhamento de middlewares (a aplicação dos middlewares ainda é no-op ou middleware vazio nos adapters atuais);
 - inicialização do servidor em um endereço configurável;
 - adaptação do contexto nativo do framework para `ports.Context`;
 - serialização consistente de resposta e status code.
 
 ### Padrão de integração
-A implementação seguirá o mesmo padrão já adotado pelo adaptador de net/http:
+As implementações seguem um padrão semelhante ao adapter net/http:
 - o núcleo da aplicação permanece inalterado;
 - os controllers e use cases continuam sendo consumidos via interfaces de porta;
 - o framework concreto atua apenas como adaptador de entrada/saída;
-- o roteador padrão continua sendo responsável por registrar as rotas e os middlewares de forma uniforme.
+- `StandardRouter` registra rotas e encaminha middlewares a cada adapter;
+- o request wrapper fornece body e mapas HTTP a controllers genéricos. Em `nethttp`, os parâmetros de path não são extraídos.
 
 ### Regras de implementação
 1. Cada framework terá um pacote próprio isolado, com um arquivo principal de adaptação, por exemplo `adapter.go`.
 2. A implementação deve respeitar o contrato de `ports.FrameworkAdapter` e não deve introduzir lógica de negócio.
 3. O mesmo conjunto de rotas, handlers e middlewares deve poder ser usado independentemente do framework escolhido.
 4. O bootstrap da aplicação deve permitir trocar de framework sem reescrever os controllers, use cases ou presenters.
-5. A escolha do framework deve ser controlada por configuração ou por uma pequena camada de composição no ponto de entrada da aplicação.
+5. `api/main.go` seleciona o adapter por `AppConfig.Framework`.
+
+### Diferenças conhecidas
+- O suporte a métodos HTTP varia: Beego tem casos explícitos para GET/POST/PUT/DELETE e usa `Any` nos demais; os outros registram o método fornecido ao framework, enquanto net/http valida o método dentro do handler.
+- `Use` não executa o middleware fornecido nos adapters existentes.
+- Os adapters diferem em extração de path params, binding, cookies e tratamento de falhas de escrita; portanto, o contrato comum não significa comportamento completamente equivalente.
 
 ### Exemplo de referência baseado em net/http
-Embora o adaptador padrão do Go em [api/infra/frameworks/nethttp/adapter.go](../../api/infra/frameworks/nethttp/adapter.go) sirva como referência de composição e fluxo, ele não será mantido como implementação final do produto. O objetivo deste exemplo é ilustrar o padrão de adaptação a ser seguido pelos frameworks concretos.
-
-Exemplo conceitual de estrutura de um adaptador:
-
-```go
-type adapter struct {
-    mux    *http.ServeMux
-    handle ports.Handler
-}
-
-func NewAdapter(handle ports.Handler) ports.FrameworkAdapter {
-    return &adapter{mux: http.NewServeMux(), handle: handle}
-}
-
-func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controller) {
-    a.mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
-        ctx := ports.Context(r.Context())
-        result, err := ctrl.WrapperExecute(ctx, requests.NewRequest(...)) // extrair os parâmetros
-        if err != nil {
-            a.handle.ResolveError(ctx, err)
-            return
-        }
-
-        w.WriteHeader(http.StatusOK)
-        _ = json.NewEncoder(w).Encode(result)
-    })
-}
-
-func (a *adapter) Use(middleware ports.Middleware) {
-    ...
-}
-
-func (a *adapter) Start(addr string) error {
-    return http.ListenAndServe(addr, a.mux)
-}
-```
+O adapter padrão do Go em [api/infra/frameworks/nethttp/adapter.go](../../api/infra/frameworks/nethttp/adapter.go) continua sendo uma opção selecionável em runtime e o fallback do bootstrap.
 
 ### Ponto importante
-- esse exemplo é apenas uma referência de fluxo de integração;
-- a implementação final deverá ser substituída por adaptadores específicos para Gin, Fiber, Echo, Chi e Beego;
-- o contrato da aplicação continua sendo o mesmo, independentemente do framework escolhido.
+- net/http é uma implementação mantida, não apenas uma referência;
+- as cinco integrações de terceiros também estão presentes;
+- os adapters compartilham a interface, mas há diferenças comportamentais concretas, listadas acima.
 
 ### Dependências recomendadas
-As integrações devem usar as bibliotecas oficiais ou mais consolidadas do ecossistema Go para cada framework, por exemplo:
+As dependências atualmente usadas incluem:
 - Gin: `github.com/gin-gonic/gin`
 - Fiber: `github.com/gofiber/fiber/v2`
 - Echo: `github.com/labstack/echo/v4`
 - Chi: `github.com/go-chi/chi/v5`
 - Beego: `github.com/beego/beego/v2/server/web`
 
-As versões devem ser fixadas no `go.mod` e acompanhadas de testes de integração básicos para garantir compatibilidade com o contrato atual.
+As versões estão fixadas no `api/go.mod`; existem testes para alguns adapters, mas o escopo não garante equivalência comportamental completa.
 
 ## Consequências
-- A aplicação passa a suportar os frameworks listados no README de forma consistente e comparável.
-- Os benchmarks deixam de depender de implementações ad hoc e passam a refletir o comportamento real de cada framework.
+- A aplicação contém adapters para os frameworks listados nesta ADR e para net/http.
+- A interface comum fornece uma base para comparação; as diferenças conhecidas devem ser consideradas ao interpretar resultados de benchmark.
 - A camada de infraestrutura fica mais modular e facilitada para futuras extensões.
 - A troca de framework torna-se um esforço localizado, reduzindo o risco de regressão.
 
 ## Referências
 1. [readme.md](../../readme.md)
 2. [api/infra/frameworks/nethttp/adapter.go](../../api/infra/frameworks/nethttp/adapter.go)
-3. [api/core/ports/handler.go](../../api/core/ports/handler.go)
+3. [api/core/ports/presenter.go](../../api/core/ports/presenter.go)
 4. [docs/adr/004-roteamento.md](004-roteamento.md)

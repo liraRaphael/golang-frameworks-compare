@@ -47,8 +47,8 @@ func TestResponse_ContractAndSerialization(t *testing.T) {
 		assert.NoError(t, err)
 
 		var result struct {
-			Body       string              `json:"Body"`
-			StatusCode int                 `json:"StatusCode"`
+			Body       string                `json:"Body"`
+			StatusCode int                   `json:"StatusCode"`
 			Headers    domain.HttpParamsType `json:"Headers"`
 		}
 		err = json.Unmarshal(b, &result)

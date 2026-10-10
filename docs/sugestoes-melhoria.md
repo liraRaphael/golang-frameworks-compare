@@ -4,56 +4,12 @@ Com base na refatoração profunda dos contratos de `Request`, `Response` e `Htt
 
 ---
 
-## 1. Cache de Reflexão na Extração de Tag de Parâmetros (Alta Performance)
+## 1. Otimização da Reflexão na Extração de Parâmetros (Alta Performance)
 ### Problema
-Atualmente, as funções `extractParamsFromTag` e `ParamsValuesToHttpParamsType` executam análises reflexivas (`reflect.TypeOf`, `NumField`, `Field(i).Tag`) em **cada requisição recebida** por qualquer adaptador de framework. A reflexão em Go é computacionalmente cara e gera alocações de memória desnecessárias no hot-path de rotas sob estresse.
+`ExtractParamsFromTag` é chamada ao construir cada `Requester`/`Responser`, mas já usa `sync.Map` para cachear os índices por tipo e evitar repetir a varredura de tags. `ParamsValuesToHttpParamsType` ainda percorre os valores via reflexão quando headers/cookies são consultados; essa é a parte potencialmente relevante para o hot path.
 
 ### Sugestão
-Implementar um cache global thread-safe (`sync.Map`) indexado pelo `reflect.Type` do parâmetro para armazenar os índices dos campos mapeados por tipo de tag.
-
-### Exemplo de Código Conceitual
-```go
-package domain
-
-import (
-	"reflect"
-	"sync"
-)
-
-type CachedFields struct {
-	Headers []int
-	Query   []int
-	Path    []int
-	Cookies []int
-}
-
-var tagCache sync.Map // map[reflect.Type]*CachedFields
-
-func ExtractParamsFromTagWithCache(typ reflect.Type) (headersFields, queryFields, pathFields, cookieFields []int) {
-	if typ == nil {
-		return
-	}
-	if typ.Kind() == reflect.Pointer {
-		typ = typ.Elem()
-	}
-
-	if val, ok := tagCache.Load(typ); ok {
-		cf := val.(*CachedFields)
-		return cf.Headers, cf.Query, cf.Path, cf.Cookies
-	}
-
-	// Executa reflexão apenas na primeira vez
-	headersFields, queryFields, pathFields, cookieFields = ExtractParamsFromTag(typ)
-	
-	tagCache.Store(typ, &CachedFields{
-		Headers: headersFields,
-		Query:   queryFields,
-		Path:    pathFields,
-		Cookies: cookieFields,
-	})
-	return
-}
-```
+Investigar otimizações para a conversão dos valores de parâmetros já conhecidos, preservando o cache thread-safe existente em `ExtractParamsFromTag`.
 
 ---
 
@@ -80,7 +36,7 @@ A interface de roteamento abstrata (`ports.Router`) atual é plana e só permite
 Adicionar suporte a sub-roteadores ou grupos na interface `ports.Router`:
 ```go
 type Router interface {
-	AddRoute(method string, path string, handler Controller[any, any], meta any)
+	AddRoute(method string, path string, handler Controller[any, any, any, any], meta any)
 	Group(prefix string, middlewares ...Middleware) Router
 	Use(middleware Middleware)
 	Start(addr string) error

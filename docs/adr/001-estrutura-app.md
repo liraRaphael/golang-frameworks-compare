@@ -14,59 +14,69 @@
 ## Contexto
 O projeto precisa de uma estrutura consistente para permitir a comparação entre frameworks web sem misturar regras de negócio, adaptação de entrada/saída e infraestrutura. A arquitetura precisa facilitar testes, substituição de dependências e observabilidade, além de evitar que a lógica de negócio dependa de detalhes de HTTP, banco de dados ou framework escolhido.
 
-A estrutura proposta aqui foi alinhada ao layout atual do repositório, em que o código da API fica sob [api](../../api) e é organizado em `adapter`, `core` e `infra`.
+A estrutura descrita neste ADR acompanha o código presente em [api](../../api). A implementação está organizada em `core`, `app` e `infra`; não existe um diretório `api/adapter`.
 
 ## Decisão
-A aplicação será organizada em três camadas principais:
+A aplicação será organizada nos pacotes que existem hoje:
 
-- `api/core`: núcleo do domínio. Contém entidades, use cases, enums, errors, contratos de request/response e portas (interfaces).
-- `api/adapter`: adaptadores de entrada/saída. Contém handlers, controllers, presenters, validação e tradução entre o mundo externo e o domínio.
-- `api/infra`: implementações concretas. Contém clientes HTTP/gRPC, repositórios, configuração, observabilidade, roteamento e integração com frameworks.
+- `api/core`: contratos e lógica do domínio, com `domain`, `ports` e `usecases`.
+- `api/app`: controllers, handler, presenters e validação que coordenam os contratos de `core`.
+- `api/infra`: configuração, contexto, diagnóstico, documentação Swagger, adapters de frameworks, clientes, observabilidade e roteador.
+
+O ponto de composição é `api/main.go`: carrega a configuração, inicializa observabilidade, monta os componentes manualmente, seleciona o framework e registra as rotas `/health` e `/hello`.
 
 ### Regras de dependência
-1. `core` não pode depender de `adapter` nem de `infra`.
-2. `adapter` pode depender de `core` e, quando necessário, de `infra`.
-3. `infra` pode depender de `core` e, em alguns casos, de `adapter` para composição de infraestrutura específica.
-4. Toda comunicação entre camadas deve ocorrer por interfaces definidas em `core`.
-5. Funções que realizam I/O, uso de caso de negócio, chamadas externas ou processamento de requisições devem receber `context.Context` como primeiro parâmetro.
+1. Use `core/ports` para contratos consumidos pela aplicação e infraestrutura; a implementação atual não aplica isolamento estrito, pois `ports.Context` importa logger e tracing de `infra`, e `ports.Router` importa o registro Swagger de `infra`.
+2. Controllers da aplicação dependem dos contratos de `core` e também de utilitários de `infra` quando necessário.
+3. O bootstrap instancia implementações concretas em `main.go`; a injeção é manual e feita por construtores.
+4. Operações que recebem contexto usam `ports.Context`, que estende `context.Context`.
 
 ### Estrutura esperada
 - `api/core/domain/...`
 - `api/core/usecases/...`
 - `api/core/ports/...`
-- `api/adapter/controller/...`
-- `api/adapter/services/...`
-- `api/adapter/validation/...`
-- `api/adapter/presenter/...`
+- `api/app/controller/...`
+- `api/app/handler/...`
+- `api/app/validation/...`
+- `api/app/presenter/...`
 - `api/infra/config/...`
+- `api/infra/context/...`
 - `api/infra/clients/...`
+- `api/infra/diagnostic/...`
+- `api/infra/docs/swagger/...`
 - `api/infra/observability/...`
+- `api/infra/router/...`
 - `api/infra/frameworks/gin/...`
 - `api/infra/frameworks/fiber/...`
 - `api/infra/frameworks/echo/...`
+- `api/infra/frameworks/chi/...`
+- `api/infra/frameworks/beego/...`
+- `api/infra/frameworks/nethttp/...`
 
 ### Responsabilidades por camada
 #### Core
 - Definir regras de negócio puras.
-- Declarar interfaces e contratos para repositórios, clientes, validadores e demais dependências.
+- Declarar as portas implementadas para clientes, validadores e outros contratos; atualmente não há contrato de repositório.
 - Manter tipos de erro de domínio e contratos de entrada/saída.
 
-#### Adapter
-- Traduzir requisições externas para objetos de domínio.
-- Aplicar validação, mapeamento de resposta e tratamento de erro.
-- Encapsular o uso de frameworks web e demais mecanismos de transporte.
-- Organizar controllers e services para separar entrada HTTP de implementação de integração.
+#### App
+- Implementar controllers, handler, presenters e validação.
+- Orquestrar os casos de uso e mapear seus resultados para contratos de resposta.
+- Manter a integração HTTP específica nos adapters de `infra/frameworks`.
 
 #### Infra
-- Implementar as interfaces definidas em `core`.
-- Lidar com banco de dados, configuração, clientes externos, tracing, métricas, routers e documentação.
+- Implementar os adapters concretos de framework e clientes externos, além de configuração, tracing, métricas, roteamento e documentação.
 - Garantir que a escolha de framework ou biblioteca não vaze para o domínio.
 - Manter cada implementação concreta de framework em um subdiretório isolado, por exemplo `api/infra/frameworks/gin` e `api/infra/frameworks/fiber`, para evitar que uma integração contamine a outra.
+
+### Limites conhecidos da implementação
+- `api/core/domain/entities`, `api/core/domain/services`, `api/infra/database`, `api/adapter` e `api/adapter/services` não existem atualmente.
+- Os contratos de `core/ports` ainda referenciam alguns tipos de `infra`; portanto, o desacoplamento de camadas descrito como objetivo não está integralmente realizado.
 
 ### Padrões recomendados
 - Interfaces pequenas e específicas.
 - Injeção de dependência via construtores.
-- Erros de domínio permanecem em `core`; mapas para HTTP/gRPC acontecem em `adapter` ou `infra`.
+- Erros e contratos de erro ficam em `core/domain`; `app/handler` resolve erros para responses e adapters de `infra/frameworks` escrevem a resposta HTTP.
 - Não colocar código de framework, banco ou SDK no `core`.
 
 ## Consequências
@@ -76,14 +86,14 @@ A aplicação será organizada em três camadas principais:
 
 ## ADRs complementares
 - [ADR-001a: Detalhamento da camada Core](001a-camada-core.md)
-- [ADR-001b: Detalhamento da camada Adapter](001b-camada-adapter.md)
+- [ADR-001b: Detalhamento da camada App](001b-camada-adapter.md)
 - [ADR-001c: Detalhamento da camada Infrastructure](001c-camada-infraestrutura.md)
 - [ADR-007: Geração automática de documentação OpenAPI/Swagger](007-openapi-swagger.md)
 - [ADR-008: Pprof e diagnóstico de performance](008-pprof.md)
 - [ADR-009: Padrões de Request, Response e HttpParam no Core](009-request-response-core.md)
 - [ADR-010: Injeção de Dependência (DI)](010-injecao-dependencia.md)
 - [ADR-011: Gestão de Configuração](011-gestao-configuracao.md)
-- [ADR-012: Automação via CI/CD (GitHub Actions)](012-automacao-cicd.md)
+- [ADR-012: Mecanismo de Validação de Dados](012-validacao-campo.md)
 
 ## Referências
 1. [Clean Architecture](https://dev.to/yuripeixinho/clean-architecture-arquitetura-limpa-33e1)

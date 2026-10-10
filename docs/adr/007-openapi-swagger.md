@@ -11,16 +11,16 @@
 - [ADR-004: Roteamento](004-roteamento.md)
 
 ## Contexto
-Como o projeto compara vários frameworks web em Go, a documentação da API precisa ser gerada automaticamente a partir das rotas, dos tipos de request/response e dos erros esperados. Isso evita divergência entre contrato e implementação e reduz manutenção manual.
+O projeto compara vários frameworks web em Go; o registry OpenAPI usa metadados de rota e tipos de entrada/saída. O schema de erro não é registrado automaticamente.
 
 ## Decisão
-A documentação OpenAPI/Swagger será gerada automaticamente com a biblioteca `github.com/swaggest/openapi-go`, usando metadados declarados nos tipos e nas rotas.
+`api/infra/docs/swagger` gera OpenAPI com `github.com/swaggest/openapi-go` e serve Swagger UI por meio de `github.com/swaggest/swgui/v5`. O registro é composto no `main.go` e recebe metadados registrados com as rotas.
 
 ### Como usar a biblioteca
-1. Definir estruturas de request, response e erros com tags de schema.
-2. Registrar cada rota com metadata de operação, path, método, summary, description e exemplos.
-3. Gerar um documento OpenAPI a partir do registrador de rotas.
-4. Expor o documento em um endpoint dedicado ou em um servidor separado para documentação.
+1. Definir os tipos e tags usados como entrada/saída da rota.
+2. Registrar rotas com `swagger.RouteMetadata` (summary, description, tags, input, output e params).
+3. `StandardRouter.AddRoute` encaminha os metadados ao registry OpenAPI.
+4. `StartSwaggerUI` publica `/openapi.json` e a UI em `/docs/`, no servidor separado configurado pela variável `APP_SWAGGER_PORT` (padrão `8082`).
 
 ### Tags de campo recomendadas
 Para cada campo, o projeto deverá usar tags de schema que descrevam o contrato de forma explícita. Exemplos recomendados:
@@ -40,16 +40,15 @@ Para cada campo, o projeto deverá usar tags de schema que descrevam o contrato 
 - `nullable`: indica que o valor pode ser nulo
 
 ### Regras de uso
-- Os tipos do `core` devem ser ricos em metadados para que a geração de documentação seja automática.
-- Os tipos de request/response devem incluir tags de schema (`title`, `description`, `example`, `default`, `deprecated`, `readOnly`, `writeOnly`, `pattern`, `format`, `enum`, `required`, `nullable`) sempre que aplicável.
-- O `adapter` deve fornecer a descrição operacional da rota, como summary e tags.
-- Os erros devem ter representação clara no schema para facilitar a documentação e o consumo por clientes.
+- Os tipos atuais `HelloRequest` e `HelloOutput` usam tags `title`, `description` e `example`; não há exigência implementada de todas as tags listadas acima.
+- O bootstrap fornece summary, description, tags, input e output para `/health` e `/hello`.
+- O registry atual não registra automaticamente o schema de erros.
 
 ### Interface
-Use a lib https://github.com/swaggo/swag/blob/master/example/basic/main.go
+O código usa `swaggest/openapi-go` e `swaggest/swgui`; não usa `swaggo/swag`.
 
 ## Consequências
-- A documentação fica sincronizada com o código.
+- A documentação de rotas é gerada dos metadados definidos no bootstrap; é necessário manter esses metadados e o contrato de execução sincronizados.
 - A manutenção do contrato da API se torna mais simples.
 - O projeto ganha uma base forte para testes, geração de SDKs e integração com clientes.
 

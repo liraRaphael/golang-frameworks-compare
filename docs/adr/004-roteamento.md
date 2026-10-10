@@ -11,63 +11,57 @@
 - [ADR-003: Handler](003-handler.md)
 
 ## Contexto
-Como o projeto compara vários frameworks web em Go, o roteamento precisa ser abstraído para que as rotas e os comportamentos sejam consistentes independentemente do framework escolhido. Além disso, é importante garantir documentação automática, observabilidade e isolamento de infraestrutura.
+Como o projeto compara vários frameworks web em Go, o roteamento usa um contrato abstrato para registrar as mesmas rotas em adapters distintos. A implementação atual ainda apresenta diferenças de comportamento entre frameworks.
 
 ## Decisão
-Será criado um componente de roteamento abstrato em `adapter` que permita registrar rotas, middlewares e handlers de forma uniforme, independentemente do framework concreto usado em `infra`.
+O roteador abstrato existente está em `api/infra/router`. `StandardRouter` registra rotas no adapter selecionado e, quando configurado, adiciona metadados ao registry Swagger.
 
 ### Objetivos
 - Permitir que a mesma definição de rota funcione em Gin, Echo, Fiber, Chi ou outro framework.
-- Centralizar regras de status code, middlewares e mapeamento de resposta.
+- Centralizar registro de rotas e encaminhamento de middlewares ao adapter. A aplicação dos middlewares ainda não está implementada nos adapters de framework existentes.
 - Habilitar documentação automática via OpenAPI/Swagger.
-- Expor endpoints de diagnóstico como `pprof` em um servidor separado.
+- Iniciar o servidor `pprof` por meio do pacote `infra/diagnostic`, em separado do servidor de rotas.
 
 ### Componente de roteamento
-- O componente será implementado por meio de um `Router` abstrato, de um `RouterBuilder` e de um conjunto de `FrameworkAdapter`.
-- Cada framework terá seu próprio inicializador em `infra/frameworks/<nome>`.
-- Uma função de registro de rotas (ex: `RegisterRoutes(router any, ...handlers)`) será responsável por definir os endpoints de forma agnóstica. O `adapter` de cada framework fará a conversão do `router any` para o tipo específico (`*gin.Engine`, `*fiber.App`).
-- Cada rota deve aceitar método HTTP, path, handler, middlewares e metadata de documentação.
-- O padrão deve prever status code padrão por método, com `POST` usando `201 Created` e demais métodos usando `200 OK` por padrão.
+- O contrato `ports.Router` declara `WithSwagger`, `AddRoute`, `Use` e `Start`; o contrato `ports.FrameworkAdapter` declara `RegisterRoute`, `Use` e `Start`.
+- `router.NewStandardRouter` recebe um `FrameworkAdapter`. Não há `RouterBuilder` nem função `RegisterRoutes` implementados.
+- `AddRoute` guarda método, path, controller e `swagger.RouteMetadata`; `router.AddTypedRoute` adapta controllers tipados à interface de rota genérica.
+- Se a inclusão da rota no registry Swagger falhar, `StandardRouter.AddRoute` atualmente descarta o erro.
+- O status é definido na resposta do controller/handler; o router não aplica default por método HTTP.
 
 ### Contratos de interface
 #### Infra / Frameworks
-A interface que cada `adapter` de framework deve implementar ficará em `infra/frameworks` e atuará como a ponte entre o mundo do framework e o contrato padrão do projeto. O objetivo é adaptar uma requisição do framework para o `Request` do domínio e converter o `Response` do domínio para a resposta do framework.
+`FrameworkAdapter` atua como ponte entre o framework concreto e as portas da aplicação, adaptando requests/responses e iniciando o servidor.
+
+Os contratos estão em `api/core/ports/presenter.go`:
 
 ```go
-// api/infra/frameworks/adapter.go
-package frameworks
-
-import "seu-projeto/api/adapter/router"
-
-// FrameworkAdapter é um exemplo de como um handler de framework (ex: gin.HandlerFunc)
-// pode ser criado para envolver um controller do domínio.
-type FrameworkAdapter func(controller YourControllerInterface) FrameworkHandler
+type FrameworkAdapter interface {
+    RegisterRoute(method, path string, ctrl Controller[any, any, any, any])
+    Use(middleware Middleware)
     Start(addr string) error
 }
 ```
 
 ### Wrapper de framework
-- A implementação concreta de `FrameworkAdapter` deve ser extremamente leve e atuar apenas como um tradutor entre o ciclo de vida do framework e o contrato padrão do `Router`.
-- Ela deve lidar com a conversão do contexto nativo do framework para `ports.Context`, além de payloads de request/response e eventos de execução do framework, sem conter lógica de negócio, regras de domínio ou persistência.
+- A implementação concreta de `FrameworkAdapter` traduz o ciclo de vida do framework para o contrato padrão do `Router`.
+- Os adapters concretos convertem contextos, corpo e parâmetros, chamam o controller e escrevem a resposta JSON. Atualmente `Use` ignora o middleware recebido em Gin, Chi, Echo, Beego e net/http; Fiber instala middleware vazio. Portanto, não se deve considerar middlewares funcionais.
 - Cada framework terá um subdiretório próprio em `infra/frameworks/<framework>` para isolar a integração e preservar a compatibilidade com as diferenças de implementação entre Gin, Fiber, Echo e outros.
 
 ### Fluxo de construção
-- O `RouterBuilder` receberá um `FrameworkAdapter` e montará um `standardRouter` com comportamento uniforme entre os frameworks comparados.
-- O `main.go` ou o bootstrap da aplicação passará apenas a escolha do framework e a construção do roteador, sem necessidade de reescrever a lógica de endpoints.
+- `main.go` escolhe entre Gin, Fiber, Echo, Chi, Beego e net/http conforme `FRAMEWORK` e constrói `StandardRouter`. Valor não reconhecido usa net/http.
 - Em testes de integração, um `MockAdapter` pode ser injetado para validar registro de rotas, middlewares e inicialização sem subir um servidor HTTP real.
 
 ### Documentação
-- A documentação OpenAPI/Swagger deverá ser gerada automaticamente a partir das rotas cadastradas.
-- A configuração de documentação ficará em `infra/docs/swagger`.
-- A geração deve aproveitar os metadados de rotas e os tipos de request/response.
+- Quando o registry é configurado, `AddRoute` registra summary, description, tags, tipos de entrada/saída e parâmetros a partir de `RouteMetadata`.
+- O pacote `infra/docs/swagger` usa `swaggest/openapi-go`, publica `/openapi.json` e serve Swagger UI em `/docs/`, num servidor separado. A geração define a resposta de saída como HTTP 200.
 
 ### Observabilidade e diagnóstico
-- O `pprof` deverá ficar em um servidor separado, por padrão na porta `8081`, configurável via `infra/config`.
-- O Swagger/OpenAPI poderá ficar em um servidor separado, por padrão na porta `8082`, também configurável.
+- `main.go` inicia `pprof` em `APP_PPROF_PORT` (padrão `8081`) e Swagger UI em `APP_SWAGGER_PORT` (padrão `8082`), em goroutines separadas.
 
 ## Consequências
 - O mesmo conjunto de rotas pode ser usado para comparar o comportamento dos frameworks sem reescrever o contrato da aplicação.
-- A documentação fica mais fácil de manter e sempre sincronizada com as rotas implementadas.
+- A definição de registro de rotas é compartilhada; o comportamento dos adapters ainda apresenta diferenças, descritas na ADR-013.
 - A infraestrutura de diagnóstico fica isolada do fluxo principal da API.
 
 ## Referências

@@ -11,13 +11,13 @@
 - [ADR-001a: Detalhamento da camada Core](001a-camada-core.md)
 
 ## Contexto
-Para padronizar e flexibilizar a entrada e saída de dados entre casos de uso, controllers e adapters de frameworks web de forma agnóstica e tipada, foram introduzidos contratos genéricos com suporte a múltiplos parâmetros HTTP por meio de reflexão (Struct Tags) e tipos auxiliares de alta performance.
+`core/domain/requests` e `core/domain/responses` definem interfaces e structs genéricas para transporte de dados. `infra/router/typed.go` fornece um adapter que converte controllers genéricos para controllers tipados.
 
 ## Decisão
-O `core` define as seguintes interfaces genéricas e structs imutáveis para transporte de dados:
+O `core` define as seguintes interfaces genéricas e structs para transporte de dados:
 
 ### Request padrão (Interface Genérica)
-O contrato de request padrão possui dois parâmetros de tipo: `BodyType` e `ParamType`. Ele extrai cabeçalhos, query strings, cookies e parâmetros de path dinamicamente por reflexão baseando-se em tags de struct (`header`, `query`, `path`, `cookie`):
+O contrato de request possui `BodyType` e `ParamType`. `Requester` expõe body, params e os mapas HTTP. Os nomes de tags aceitos são `header`, `query`, `path` e `cookie`; a extração de índices usa reflexão e cacheia os índices por tipo:
 
 ```go
 type Request[BodyType any, ParamType any] interface {
@@ -31,7 +31,7 @@ type Request[BodyType any, ParamType any] interface {
 ```
 
 ### Response padrão (Interface Genérica)
-O contrato de response também é genérico e permite expor o corpo, parâmetros, cabeçalhos, cookies e status code de forma tipada e consistente:
+O contrato de response possui body, params, headers, cookies e status code:
 
 ```go
 type Response[BodyType any, ParamType any] interface {
@@ -52,22 +52,28 @@ type HttpParamsType map[string]HttpParamType
 type HttpParamType []string
 ```
 
-O tipo `HttpParamType` expõe métodos utilitários robustos para conversão e fallback seguro (ex: `GetFirstIntOrDefault`, `GetFirstBoolOrDefault`).
+`HttpParamType` expõe helpers como `GetFirstInt` e `GetFirstBoolOrDefault`. O comportamento de fallback é implementado pelo respectivo helper; não deve ser tratado como validação dos dados.
 
 ### Instanciação de Requests e Responses
-Os construtores no Core geram automaticamente as estruturas concretas (`Requester` e `Responser`) e realizam a injeção/extração baseada em tags:
+Os construtores geram `Requester`/`Responser` e, quando fornecido um `ParamType` struct compatível, extraem ou populam campos a partir das tags:
 - `requests.NewRequest[BodyType, ParamType](body, params)`
 - `requests.NewRequestFromParams[BodyType, ParamType](body, headers, query, path, cookies)`
 - `responses.NewResponse[BodyType, ParamType](body, params, statusCode)`
 - `responses.NewResponseFromParams[BodyType, ParamType](body, statusCode, headers, cookies)`
 
-Se `ParamType` for fornecido como um ponteiro de struct, os valores de cabeçalhos, query e path params com as struct tags correspondentes serão populados de forma automática no campo `params`. Caso o `ParamType` seja especificado como `any`, o parser ignora a reflexão e assume um valor nulo/seguro sem causar panics.
+`PopulateParams` aceita struct ou ponteiro para struct e converte o primeiro valor encontrado por tag para tipos string, int, uint e bool; tipos incompatíveis retornam erro. `NewRequestFromParams` e `NewResponseFromParams` transformam esse erro em panic. `ExtractParamsFromTag` ignora tipos que não sejam struct e mantém cache de índices por tipo.
+
+### Integração atual com rotas
+- Os adapters de framework constroem requests como `Request[any, any]`, preenchendo os mapas HTTP em wrappers concretos.
+- `AddTypedRoute` converte body e `Params()` via JSON marshal/unmarshal antes de chamar o controller tipado. Ele delega os acessores Headers/QueryParams/PathParams/Cookies ao request original.
+- O wrapper tipado não repopula `InputParams` a partir dos mapas HTTP; portanto, a extração tipada dos parâmetros não está garantida no fluxo das rotas atuais.
+- `Responser.MarshalJSON` emite `Body`, `StatusCode` e `Headers` (com esses nomes de chave), não inclui cookies nem `Params`. Os adapters também usam o status e headers da response HTTP diretamente.
 
 ### Regras
 - O `Request` e o `Response` permanecem em `core/domain` e não dependem de bibliotecas de terceiros ou frameworks.
-- Adapters de infraestrutura devem traduzir as requisições HTTP em `Request[any, any]` usando as funções construtoras e o wrapper de requisição para compatibilidade genérica nos controllers.
+- Adapters de infraestrutura traduzem requisições HTTP para `Request[any, any]`; `AddTypedRoute` é a ponte disponível para controllers tipados.
 
 ## Consequências
-- Total tipagem e segurança de dados de ponta a ponta sem vazamento de detalhes de framework.
+- Contratos genéricos estão disponíveis; as rotas existentes usam interfaces genéricas e a conversão tipada inclui serialização JSON intermediária.
 - Reflexão robusta e encapsulada para extração automática de dados HTTP via struct tags.
-- Desempenho preservado e prevenção de panics de ponteiro nulo em requisições genéricas.
+- Os índices das tags são cacheados por tipo; `NewRequestFromParams`/`NewResponseFromParams` ainda podem gerar panic se a conversão de um parâmetro tagueado falhar.

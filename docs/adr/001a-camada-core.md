@@ -15,18 +15,17 @@ A camada `core` precisa ser bem definida para manter as regras de negócio isola
 ## Decisão
 A camada `core` será organizada em subpacotes com responsabilidades claras:
 
-- `domain/entities`: entidades de negócio e regras internas.
-- `domain/requests`: tipos de entrada para os casos de uso.
-- `domain/responses`: tipos de saída para uso externo.
-- `domain/errors`: erros de domínio e erros de negócio.
-- `domain/enums`: constantes e tipos enumerados relevantes.
-- `usecases`: implementação dos fluxos principais da aplicação.
-- `ports`: interfaces para repositórios, clientes externos e validações.
+- `domain`: tipos HTTP, requests, responses, enums e erros; atualmente não há pacote `domain/entities`.
+- `usecases`: implementação do caso de uso `HelloUseCase`.
+- `ports`: contratos de controller, handler, middleware, presenter, validator, cliente, contexto, router e adapters de framework.
 
 ### Regras
-- Nenhuma dependência de `adapter` ou `infra` é permitida.
-- Todas as operações de negócio devem receber `ports.Context` como contrato de borda, com o `Context` em `core/ports` compondo `context.Context`.
+- A implementação atual não está totalmente isolada de `infra`: `ports.Context` referencia `infra/observability/logger` e OpenTelemetry; `ports.Router` referencia `infra/docs/swagger`.
+- `HelloUseCase.Execute` recebe `ports.Context` e um tipo de request de domínio; não depende diretamente de um framework web.
 - Interfaces devem ser pequenas, específicas e fáceis de mockar.
+
+### Implementação presente
+O use case de Hello delega a produção da saída à porta `HelloPresenter`. Os tipos `HelloRequest`, `HelloOutput`, `ErrorResponse`, `ClientError` e `FieldValidationError` vivem nos pacotes existentes de `core/domain`. Não há conversor de moeda implementado em `core`.
 
 ## Consequências
 - A lógica de negócio fica centralizada e reutilizável.

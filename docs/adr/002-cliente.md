@@ -13,37 +13,35 @@
 Para permitir a comunicação com serviços externos sem acoplar o domínio aos detalhes de transporte, é necessário definir um contrato de cliente reutilizável. Esse contrato deve ser compatível com chamadas HTTP e gRPC, permitir configuração de timeout, headers, autenticação e tratamento de erros, e manter o domínio independente de bibliotecas específicas.
 
 ## Decisão
-Será criado um contrato de cliente na camada `core` e sua implementação concreta em `infra`.
+O contrato existente é `ports.Client` em `core/ports/client.go`; implementações ficam em `infra/clients`.
 
 ### Contrato
 - O pacote `core/ports` deverá expor uma interface `Client` com operações genéricas para execução de chamadas externas.
-- A interface deverá aceitar `context.Context` e um payload de requisição tipado, retornando um payload de resposta tipado e `error`.
+- `Client.Do` recebe `ports.Context`, `enums.HttpMethod`, URL e `requests.Request[any, any]`, retornando `responses.Response[any, any]` e `error`.
 - O uso de `core/domain/enums` deverá incluir um enum `HttpMethod` com os métodos suportados: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS` e `HEAD`.
 
 ### Implementações
-- `infra/clients/http` para chamadas HTTP usando `net/http` e outro com `fasthttp`.
-- `infra/clients/grpc` para chamadas gRPC, se necessário no futuro.
-- Cada implementação deve assumir a responsabilidade de serialização, configuração e tratamento de transporte, sem expor detalhes do framework para o domínio.
-- a alteração entre grpc ou http não deverá ser sentido
-- para http será testados os cenários com http1.1 e http2c
+- `infra/clients/nethttp` usa `net/http`; `infra/clients/fasthttp` usa `fasthttp`.
+- `infra/clients/grpc` existe, mas sua chamada genérica `Do` ainda não invoca um serviço: retorna `ClientError` com status 501. A criação de conexão usa credenciais inseguras.
+- Os clientes HTTP serializam o body JSON, copiam headers e devolvem o status, headers e body na resposta genérica. Se o body não for JSON, o cliente HTTP devolve seu conteúdo como string.
+- Não há evidência na implementação de testes comparativos específicos para HTTP/1.1 e HTTP/2 cleartext.
 
 ### Erros
-- Erros de comunicação devem ser representados por tipos específicos em `core/domain/errors`.
-- Erros de resposta com status inesperado devem preservar informações como status code, corpo e headers, permitindo mapeamento posterior em `adapter` ou `infra`.
+- `core/domain/errors.ClientError` contém status code, body, mensagem e erro subjacente.
+- Os clientes HTTP retornam erros de transporte em `ClientError`; as respostas HTTP, inclusive status não-2xx, são devolvidas como response, sem conversão automática para erro.
 - O contrato não deve depender de erros específicos de `net/http`, `grpc` ou outra biblioteca.
 
 ### Injeção
-- O cliente será injetado em serviços e use cases por meio de construtor.
-- Exemplos de uso: `NewPixService(client ports.Client)` ou `NewIngressClient(client ports.Client, cfg config.ExternalServiceConfig)`.
+- O contrato permite injeção por construtor, mas os clientes não são compostos ou utilizados pelo fluxo `/hello` ou `/health` no `main.go`.
 
 ### Regras
 - O `core` não deve importar bibliotecas de transporte.
-- O `adapter` deve traduzir as entradas do usuário para o formato esperado pelo cliente, mas não implementar a comunicação diretamente.
+- O `app` pode orquestrar o contrato do cliente, mas não há atualmente um service que o utilize.
 - O `infra` deve ser a única camada responsável pela comunicação real com o mundo externo.
 
 ## Consequências
 - O domínio fica mais limpo e testável.
-- Alterar de HTTP para gRPC ou trocar bibliotecas se torna uma mudança localizada em `infra`.
+- O contrato único permite trocar implementações HTTP no ponto de composição; a implementação gRPC genérica ainda não oferece equivalência funcional.
 - O tratamento de erro fica padronizado e mais simples de mapear em respostas da API.
 
 ## Referências

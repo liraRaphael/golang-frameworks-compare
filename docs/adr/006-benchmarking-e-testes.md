@@ -1,6 +1,6 @@
 # ADR-006: Estratégia de benchmarking e testes
 
-**Status**: Proposto
+**Status**: Proposto — estratégia ainda não implementada integralmente
 
 **Data**: 2026-06-24
 
@@ -11,14 +11,14 @@
 - [README](../../readme.md)
 
 ## Contexto
-O projeto pretende comparar frameworks web Go em termos de desempenho, consumo de recursos, complexidade de integração e consistência. Para isso, é necessário definir uma estratégia de testes reutilizável, com cenários claros, métricas observáveis e execução reproduzível.
+Este ADR registra uma estratégia proposta; ela não deve ser interpretada como descrição de infraestrutura já presente em `api`. O código contém testes Go unitários e de adapters, mas não configura JMeter, containers de benchmark ou coleta de todas as métricas listadas aqui.
 
 ## Decisão
-A estratégia de validação do projeto será composta por três camadas:
+A estratégia proposta de validação será composta por três camadas:
 
 1. Testes unitários do domínio e dos casos de uso.
 2. Testes de integração de adapter e infraestrutura.
-3. Benchmarks end-to-end com JMeter e observabilidade integrada.
+3. Benchmarks end-to-end com JMeter e observabilidade integrada, ainda não implementados nos pacotes de `api`.
 
 ### Testes unitários
 - Cobrir regras de negócio em `core`.
@@ -26,17 +26,17 @@ A estratégia de validação do projeto será composta por três camadas:
 - Priorizar cenários de sucesso, falha e edge cases.
 
 ### Testes de integração
-- Validar roteamento, parsing de request, handler e serialização de response.
+- Os testes existentes cobrem componentes do domínio, use cases, controllers, clientes e adapters de frameworks. O escopo varia por pacote; não há garantia de cobertura end-to-end dos cenários desta lista.
 - Usar mocks ou stubs para clientes externos.
-- Manter o teste focado no comportamento da camada de adapter/infra.
+- Manter o teste focado no comportamento de `app`/`infra`.
 
 ### Benchmarks
-- Executar cenários básicos e complexos com JMeter.
+- Como objetivo, executar cenários básicos e complexos com JMeter; atualmente `api/main.go` registra somente `/health` e `/hello`.
 - Medir latência, throughput, uso de CPU, memória e erro por requisição.
-- Rodar os testes em containers Docker para reduzir variação de ambiente.
+- A execução em containers Docker é proposta e não está configurada na implementação da API.
 
 ### Isolamento de ambiente
-- Para que os resultados entre frameworks sejam comparáveis, o ambiente de execução deve ser fixado e controlado.
+- Como requisito futuro, para que os resultados entre frameworks sejam comparáveis, o ambiente de execução deve ser fixado e controlado.
 - O benchmark deve rodar com limites explícitos de CPU e memória no Docker, por exemplo `cpus: "1.0"` e `mem_limit: "512m"`, para reduzir a interferência do sistema operacional.
 - O mesmo conjunto de recursos e restrições deve ser aplicado a todos os frameworks comparados, evitando variações causadas por conteúdo concorrente no host.
 - O ambiente deve registrar, ao menos, a versão do kernel, a quantidade de CPU disponível e a configuração do container utilizado na execução.

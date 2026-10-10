@@ -4,13 +4,13 @@
 
 **Data**: 2026-06-26
 
-**Tags**: [validation, validator, core, ports, infra, clean-arch]
+**Tags**: [validation, validator, core, ports, app]
 
 ## Pré-requisito
 
 * [ADR-001: Estrutura da aplicação](./001-estrutura-app.md)
 * [ADR-001a: Detalhamento da camada Core](./001a-camada-core.md)
-* [ADR-001b: Detalhamento da camada Adapter](./001b-camada-adapter.md)
+* [ADR-001b: Detalhamento da camada App](./001b-camada-adapter.md)
 
 ## Contexto
 
@@ -20,36 +20,34 @@ Contudo, acoplar as estruturas de dados ou os casos de uso diretamente a uma bib
 
 ## Decisão
 
-Será criado um contrato genérico de validação na camada `core/ports` e uma implementação concreta baseada na biblioteca `go-playground/validator/v10` na camada de infraestrutura.
+O contrato `ports.Validator` está em `api/core/ports/handler.go`; a implementação concreta `PlaygroundValidator` está em `api/app/validation/playground.go` e usa `go-playground/validator/v10`.
 
 ### Contrato (Interface)
 
-A interface de validação será definida em `api/core/ports/validator.go` (ou pacote equivalente dentro de `core/ports`) com a assinatura genérica solicitada:
+O contrato atual recebe `ports.Context` e devolve um `error`:
 
 ```go
 package ports
 
-import "context"
-
-// Validator define o contrato genérico para validação de dados na aplicação.
 type Validator interface {
-	Validate(ctx context.Context, input any) (error)
+	Validate(ctx Context, input any) error
 }
 
 ```
 
-*Nota sobre o retorno `error`:* O retorno de erro deverá ser criado em `api\core\domain\errors` de nome `FieldValidationError` com informações relevantes tais como: tag, nome que campo, pacote completo (veja o restante em https://pkg.go.dev/github.com/go-playground/validator/v10#FieldError).
+`core/domain/errors.FieldValidationError` contém uma lista de `FieldError` com `Field`, `Tag`, `Value`, `Param` e `Namespace`. `PlaygroundValidator` converte `validator.ValidationErrors` para esse tipo; outros erros são devolvidos sem transformação.
 
 ### Implementação Concreta
 
-A implementação concreta utilizará o `go-playground/validator` e residirá em `api/adapter/validation/playground.go`:
+A implementação concreta utiliza `go-playground/validator` e reside em `api/app/validation/playground.go`:
 
 ```go
 package validation
 
 import (
-	"context"
 	"github.com/go-playground/validator/v10"
+	"github.com/liraraphael/go-framework-bench/api/core/domain/errors"
+	"github.com/liraraphael/go-framework-bench/api/core/ports"
 )
 
 type PlaygroundValidator struct {
@@ -62,11 +60,20 @@ func NewPlaygroundValidator() ports.Validator {
 	}
 }
 
-func (pv *PlaygroundValidator) Validate(ctx context.Context, input any) (error) {
+func (pv *PlaygroundValidator) Validate(ctx ports.Context, input any) error {
 	err := pv.validate.StructCtx(ctx, input)
 	if err != nil {
-		// Retorna o erro original ou uma estrutura mapeada de erros de validação (ex: erros.FieldValidationError)
-		return fieldValidationError
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			fieldErrors := make([]errors.FieldError, 0, len(validationErrors))
+			for _, fe := range validationErrors {
+				fieldErrors = append(fieldErrors, errors.FieldError{
+					Field: fe.Field(), Tag: fe.Tag(), Value: fe.Value(),
+					Param: fe.Param(), Namespace: fe.Namespace(),
+				})
+			}
+			return &errors.FieldValidationError{Errors: fieldErrors}
+		}
+		return err
 	}
 	return nil
 }
@@ -76,11 +83,11 @@ func (pv *PlaygroundValidator) Validate(ctx context.Context, input any) (error) 
 ### Regras de Uso e Acoplamento
 
 * **Camada Core**: As structs de Request em `core/domain/requests` podem conter tags de validação (ex: `validate:"required"`), visto que representam restrições do próprio caso de uso, mas o `core` **nunca** importará ou executará a biblioteca de validação diretamente.
-* **Camada Adapter**: Os controllers receberão a interface `ports.Validator` por injeção de dependência. Após o binding do JSON/Payload específico do framework, o controller invocará o método `Validate`.
-* **Tratamento de Erros**: Se o retorno do validador indicar falhas, o `adapter/handler` mapeará esses erros para o formato de resposta padronizado da API (conforme [ADR-003](https://www.google.com/search?q=003-handler.md)).
+* **App**: `HelloController` recebe o validator por construtor e valida o request antes de invocar o use case. O framework faz o binding do JSON antes de chamar o controller.
+* **Tratamento de Erros**: O erro é devolvido ao adapter; sem registro de tipo/mensagem no `standardHandler`, o fallback atual gera resposta 500, não detalhes de validação.
 
 ## Consequências
 
-* **Isolamento Total**: O domínio e os casos de uso não conhecem o motor de validação.
-* **Uniformidade no Benchmark**: Todos os frameworks comparados utilizarão exatamente a mesma engine de validação, removendo discrepâncias de performance que surgiriam se usássemos o validador nativo de cada um deles (ex: o validador embutido do Echo vs. o do Gin).
-* **Substituibilidade**: Caso seja necessário trocar para uma biblioteca mais performática (como `go-andiamo/validator` ou geração de código estático), a mudança impactará apenas o bootstrap da aplicação e a camada `infra`.
+* **Isolamento do motor**: O contrato impede que controllers dependam diretamente da engine, embora a implementação viva em `app`.
+* **Uniformidade entre adapters**: Os adapters usam o mesmo controller/engine nos endpoints que validam; atualmente `/hello` utiliza validação, enquanto `/health` não valida payload.
+* **Tratamento atual**: As falhas de validação não têm um mapper registrado no bootstrap e são devolvidas pelo fallback 500 do handler padrão.

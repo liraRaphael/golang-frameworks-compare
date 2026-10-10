@@ -11,19 +11,19 @@
 - [ADR-001c: Detalhamento da camada Infrastructure](001c-camada-infraestrutura.md)
 
 ## Contexto
-Para manter o desacoplamento proposto na ADR-001 e facilitar a troca de implementações concretas, como substituir um repositório real por um mock em testes, é necessário um padrão de injeção de dependência consistente. Sem isso, a composição da aplicação fica acoplada a detalhes de implementação e a manutenção dos componentes se torna mais difícil.
+Para manter o desacoplamento proposto na ADR-001 e facilitar a substituição de dependências em testes, é necessário um padrão de injeção de dependência consistente. Sem isso, a composição da aplicação fica acoplada a detalhes de implementação e a manutenção dos componentes se torna mais difícil.
 
 ## Decisão
 Utilizaremos Injeção de Dependência via Construtor (Constructor Injection) de forma manual. Não utilizaremos containers de DI, como `uber-dig` ou `google/wire`, para preservar a simplicidade e reduzir o overhead no startup da aplicação, especialmente em cenários de benchmark de cold-start.
 
 ### Padrão adotado
-- Cada componente principal, como controller, use case e repository, deve expor uma função `New...` que receba suas dependências por interfaces.
-- A composição da aplicação deve ocorrer no `main.go` ou em um pacote dedicado de bootstrap, como `api/cmd/bootstrap` ou `api/app/bootstrap`.
-- As dependências devem ser definidas em termos de interfaces pertencentes à camada `core` ou `adapter`, evitando acoplamento a implementações concretas.
+- Componentes como `HelloController`, `HelloUseCase` e clientes possuem construtores `New...`; nem todo componente tem dependências ou um construtor que receba interfaces.
+- Atualmente a composição ocorre em `api/main.go`; não há pacote separado de bootstrap.
+- Os controllers/use cases recebem algumas dependências por interfaces de `core/ports`; o bootstrap instancia implementações de `app` e `infra`. A separação não é completa: alguns contratos de `core/ports` importam tipos de `infra`.
 - Os componentes devem permanecer fáceis de instanciar em testes, permitindo a substituição de dependências sem alterações no fluxo principal.
 
 ## Consequências
-- O desacoplamento entre camadas aumenta e a troca de implementação fica mais simples.
+- A composição manual torna explícitas as dependências, embora as referências de `core/ports` à infraestrutura limitem o desacoplamento estrito.
 - A aplicação se torna mais testável e mais previsível em cenários de benchmark.
 - O projeto evita a complexidade e o overhead de containers de DI, preservando performance e simplicidade.
 

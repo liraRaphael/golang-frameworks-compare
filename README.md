@@ -59,6 +59,7 @@ Cada framework será avaliado por recursos prontos que ele oferece, como roteame
 
 ## Cenários de benchmark
 Os cenários foram escolhidos para cobrir diferentes tipos de custo operacional e de concorrência.
+Os requisitos dos cenários ainda não detalhados estão documentados nas ADRs [102](docs/adr/102-buscador-de-cep.md), [103](docs/adr/103-ingresso-esgotado.md) e [104](docs/adr/104-pix-black-friday.md).
 
 ### Básicos
 - Health Check: devolver um sucesso visando que a aplicação está saudável
@@ -76,4 +77,3 @@ Os cenários foram escolhidos para cobrir diferentes tipos de custo operacional 
 - Criar o primeiro endpoint funcional com um framework inicial.
 - Montar a infraestrutura de observabilidade e benchmark com Docker.
 - Rodar a primeira bateria de testes e consolidar os resultados.
-

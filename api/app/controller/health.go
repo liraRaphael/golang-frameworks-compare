@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"net/http"
+
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -14,8 +16,7 @@ func NewHealthController() ports.HealthController {
 }
 
 func (c *healthController) Execute(ctx ports.Context, req requests.Request[any, any]) (responses.Response[any, any], error) {
-	responser := map[string]string{
+	return responses.NewResponse[any, any](map[string]string{
 		"status": "ok",
-	}
-	return responses.NewResponse[any, any](responser, interface{}(nil), 200), nil
+	}, nil, http.StatusOK), nil
 }

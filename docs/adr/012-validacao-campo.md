@@ -20,7 +20,10 @@ Contudo, acoplar as estruturas de dados ou os casos de uso diretamente a uma bib
 
 ## Decisão
 
-O contrato `ports.Validator` está em `api/core/ports/handler.go`; a implementação concreta `PlaygroundValidator` está em `api/app/validation/playground.go` e usa `go-playground/validator/v10`.
+O contrato `ports.Validator` está em `api/core/ports/validator.go`; a implementação concreta `PlaygroundValidator` está em `api/app/validation/playground.go` e usa `go-playground/validator/v10`.
+Regras de validação customizadas compartilhadas ficam em `api/app/validation/validation.go` e são registradas pelo `PlaygroundValidator`; os campos declaram essas regras por tags no DTO. A regra `finite_conversion` acessa os demais campos do DTO para impedir resultado aritmético não finito antes do use case.
+
+No cenário de conversão de moedas, `From` e `To` declaram `validate:"required,oneof=USD BRL"`; `Value` declara `required`, `finite`, `gte=0` e `finite_conversion`. A regra customizada `finite_conversion` usa `CurrencyConversionRequest.CurrencyQuote()` para verificar o resultado calculado e arredondado. As regras customizadas e a biblioteca validator permanecem na camada `app`; o request no Core contém apenas tags e operações puras do domínio.
 
 ### Contrato (Interface)
 
@@ -55,8 +58,12 @@ type PlaygroundValidator struct {
 }
 
 func NewPlaygroundValidator() ports.Validator {
+	validate := validator.New()
+	if err := registerValidationRules(validate); err != nil {
+		panic(err)
+	}
 	return &PlaygroundValidator{
-		validate: validator.New(),
+		validate: validate,
 	}
 }
 
@@ -83,11 +90,13 @@ func (pv *PlaygroundValidator) Validate(ctx ports.Context, input any) error {
 ### Regras de Uso e Acoplamento
 
 * **Camada Core**: As structs de Request em `core/domain/requests` podem conter tags de validação (ex: `validate:"required"`), visto que representam restrições do próprio caso de uso, mas o `core` **nunca** importará ou executará a biblioteca de validação diretamente.
-* **App**: `HelloController` recebe o validator por construtor e valida o request antes de invocar o use case. O framework faz o binding do JSON antes de chamar o controller.
-* **Tratamento de Erros**: O erro é devolvido ao adapter; sem registro de tipo/mensagem no `standardHandler`, o fallback atual gera resposta 500, não detalhes de validação.
+* **Framework/roteamento tipado**: o adapter faz o binding do JSON e verifica o content type; `api/infra/router` converte o body para o DTO da rota e executa o `ports.Validator` antes de chamar o controller.
+* **Controller**: recebe o request já convertido e validado, executa/orquestra o caso de uso, define o status e cria `responses.Response` tipada. Não deve repetir validação do DTO nem serializar HTTP/JSON.
+* **Use case**: recebe o request validado e retorna apenas o corpo tipado da resposta e `error`; não cria `responses.Response`, não define status HTTP e não serializa.
+* **Tratamento de Erros**: o erro é devolvido ao adapter e `FieldValidationError` é mapeado pelo `standardHandler` para HTTP 400; detalhes internos do motor de validação não são enviados ao cliente.
 
 ## Consequências
 
 * **Isolamento do motor**: O contrato impede que controllers dependam diretamente da engine, embora a implementação viva em `app`.
-* **Uniformidade entre adapters**: Os adapters usam o mesmo controller/engine nos endpoints que validam; atualmente `/hello` utiliza validação, enquanto `/health` não valida payload.
-* **Tratamento atual**: As falhas de validação não têm um mapper registrado no bootstrap e são devolvidas pelo fallback 500 do handler padrão.
+* **Uniformidade entre adapters**: os adapters encaminham o payload à mesma validação compartilhada na rota tipada antes de executar o controller; o controller constrói a response tipada e o adapter serializa/escreve a resposta. Rotas sem body tipado, como `/health`, não executam validação de DTO.
+* **Tratamento atual**: falhas `FieldValidationError` são convertidas em HTTP 400 com `validation_error` pelo handler padrão; outros erros sem mapper continuam usando o fallback HTTP 500.

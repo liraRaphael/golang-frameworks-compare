@@ -7,6 +7,7 @@ import (
 
 	"github.com/liraraphael/go-framework-bench/api/infra/context"
 
+	domainerrors "github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/stretchr/testify/assert"
@@ -42,6 +43,32 @@ func TestStandardHandler_Handle(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, "internal_error", body.Code)
 		assert.Equal(t, "Erro interno do servidor não mapeado", body.Message)
+	})
+
+	t.Run("request errors are mapped to 400 without exposing internals", func(t *testing.T) {
+		resp := h.Handle(ctx, http.StatusOK, domainerrors.NewRequestError(errors.New("parser details")), nil, nil)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode())
+		body, ok := resp.Body().(*responses.ErrorResponse)
+		assert.True(t, ok)
+		assert.Equal(t, "invalid_request", body.Code)
+		assert.NotContains(t, body.Message, "parser details")
+	})
+
+	t.Run("validation errors include field details and return 400", func(t *testing.T) {
+		err := &domainerrors.FieldValidationError{Errors: []domainerrors.FieldError{{
+			Field: "Value",
+			Tag:   "gte",
+			Value: -1.0,
+		}}}
+		resp := h.Handle(ctx, http.StatusOK, err, nil, nil)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode())
+		body, ok := resp.Body().(*responses.ErrorResponse)
+		assert.True(t, ok)
+		assert.Equal(t, "validation_error", body.Code)
+		assert.Equal(t, "Value", body.Details[0].Field)
+		assert.Equal(t, "gte", body.Details[0].Cause)
 	})
 
 	t.Run("register and resolve by error message", func(t *testing.T) {

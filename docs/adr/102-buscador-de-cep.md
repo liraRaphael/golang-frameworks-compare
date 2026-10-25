@@ -24,18 +24,18 @@
 - [ADR-013: Implementação dos frameworks web comparados](013-implementacao-frameworks-web.md)
 
 ## Contexto
-Este ADR especifica o cenário de benchmark Busca de CEP listado no [README](../../readme.md); não descreve funcionalidade presente. A API registra atualmente apenas `/health` e `/hello`. Não existem rota, request, response, serviço de CEP ou testes deste fluxo em `api`.
+Este ADR define o cenário de benchmark de Busca de CEP listado no [README](../../readme.md). Ele representa a especificação do comportamento desejado para a funcionalidade, não uma descrição da implementação já existente. A aplicação atual não expõe rota, request, response, serviço de CEP nem testes desse fluxo em `api`.
 
-O cenário mede roteamento e extração de parâmetro de rota, validação, chamada HTTP ao ViaCEP e serialização. A aplicação não usará cache: cada consulta válida deve chegar ao serviço externo, tornando a latência e a disponibilidade do ViaCEP parte do resultado medido.
+O cenário mede roteamento e extração de parâmetro de rota, validação, chamada HTTP ao ViaCEP e serialização da resposta. A aplicação não usará cache: cada consulta válida deve chegar ao serviço externo, tornando a latência e a disponibilidade do ViaCEP parte do resultado medido.
 
-As ADRs de arquitetura são diretrizes, não prova de implementação. Em particular:
-- `api/core/ports/service.go` existe, mas atualmente contém somente a declaração do pacote `ports`; não há interface de serviço de CEP.
+As ADRs de arquitetura funcionam como referência de projeto e não como prova de implementação. Em particular:
+- `api/core/ports/service.go` existe, mas hoje contém apenas a declaração do pacote `ports`; ainda não há interface de serviço de CEP.
 - `api/app/service` ainda não existe.
-- `ports.Client` é o contrato de cliente externo e as implementações HTTP estão em `infra/clients`; não há cliente ViaCEP específico.
+- `ports.Client` é o contrato do cliente externo e as implementações HTTP ficam em `infra/clients`; não existe cliente ViaCEP específico.
 - Clientes HTTP devolvem respostas não-2xx como response, sem convertê-las automaticamente em erro (ADR-002).
-- Erros sem mapeamento explícito no handler atual resultam no fallback HTTP 500 (ADR-003).
-- Os adapters não garantem equivalência total de extração de path params, binding ou escrita da resposta; `Use` ainda não aplica os middlewares fornecidos (ADR-013).
-- A infraestrutura de benchmarks e a instrumentação de todas as métricas descritas na ADR-006 não estão integralmente implementadas.
+- Erros sem mapeamento explícito no handler atual resultam em fallback HTTP 500 (ADR-003).
+- Os adapters não garantem equivalência total de extração de path params, binding ou escrita da resposta; `Use` ainda não aplica os middlewares previstos (ADR-013).
+- A infraestrutura de benchmarks e a instrumentação de métricas previstas na ADR-006 ainda não estão integradas ao projeto.
 
 ## Decisão
 Se implementado, o cenário consultará o ViaCEP diretamente, sem cache. A chamada ao serviço ficará na camada `api/app/service`: controllers não chamarão diretamente o cliente HTTP nem a API externa. A interface do serviço será declarada em `api/core/ports/service.go` e sua implementação concreta será injetada no controller.
@@ -86,7 +86,7 @@ type CepService interface {
 `responses.CepAddress` representa o endereço encontrado e não deve representar um CEP inexistente como endereço vazio. A assinatura e o pacote concreto do tipo de endereço podem ser ajustados à organização final dos contratos; o princípio obrigatório é manter a interface no arquivo `api/core/ports/service.go` e a implementação/orquestração em `api/app/service`.
 
 Responsabilidades:
-- **Controller (`api/app/controller`)**: obter o CEP de `PathParams()`, chamar o validador, chamar `CepService.Find` e produzir a response HTTP. Não deve conhecer ViaCEP, URL externa nem detalhes de `ports.Client`.
+- **Controller (`api/app/controller`)**: receber o CEP já convertido e validado, chamar `CepService.Find` e criar `responses.Response` tipada com status apropriado para resultados conhecidos. Não deve validar DTOs de transporte, serializar HTTP/JSON, nem conhecer ViaCEP, URL externa ou detalhes de `ports.Client`.
 - **Porta (`api/core/ports/service.go`)**: declarar o contrato consumido pelo controller.
 - **Serviço (`api/app/service`)**: implementar `CepService`; chamar `ports.Client` em cada consulta válida, verificar status e conteúdo da resposta e converter o payload remoto para o tipo de endereço.
 - **Cliente (`api/infra/clients`)**: executar a comunicação HTTP real por meio de `ports.Client`; a camada `app` não deve importar `net/http`, `fasthttp` ou SDK de framework.
@@ -106,6 +106,8 @@ O serviço deve configurar um timeout finito para chamadas externas. O mesmo tim
 - CEP válido inexistente: HTTP 404. O campo `erro: true` do ViaCEP deve ser interpretado como ausência de resultado, nunca como endereço válido.
 - Timeout, falha de transporte, status externo inesperado ou payload inválido: HTTP 502 para erro de dependência externa. Erros internos inesperados: HTTP 500. Nenhum desses casos pode produzir resposta de sucesso vazia.
 - Respostas de erro devem usar `responses.ErrorResponse` com códigos estáveis, por exemplo `invalid_cep`, `cep_not_found`, `upstream_error` e `internal_error`. O mapeamento explícito deve ser registrado ou implementado no fluxo de resposta; não depender do fallback HTTP 500 para erros de entrada ou ausência de recurso.
+
+O DTO dos parâmetros de path declara a obrigatoriedade e o formato do CEP em tags `validate` (por exemplo, `validate:"required,cep"`). A rota tipada converte o path para o DTO e executa `ports.Validator` antes do controller; a regra customizada de oito dígitos ASCII fica em `api/app/validation/validation.go`. O controller não valida nem normaliza o CEP. A existência do CEP e a interpretação de `erro: true` dependem da consulta e pertencem ao serviço.
 
 O contrato de sucesso deve representar os campos efetivamente retornados pelo ViaCEP. Exemplos de tipos conceituais:
 
@@ -139,9 +141,9 @@ Os caminhos abaixo são uma proposta para implementação futura; não indicam a
 - `api/core/ports/client.go`: reutilizar o contrato genérico `ports.Client`; não criar chamada HTTP de ViaCEP diretamente no domínio.
 
 #### App
-- `api/app/controller/cep.go`: extrair e validar path param, chamar `CepService` e montar response/status.
-- `api/app/service/cep.go`: implementar o serviço de CEP, incluindo chamada ao client e interpretação do resultado externo.
-- `api/app/validation/cep.go` (ou validador compartilhado): validar oito dígitos ASCII de forma uniforme.
+- `api/app/controller/cep.go`: receber os path params convertidos/validados, chamar `CepService` e construir `responses.Response` tipada, definindo o status HTTP para resultados conhecidos.
+- `api/app/service/cep.go`: implementar o serviço de CEP, incluindo chamada ao client e interpretação do resultado externo; retornar endereço tipado e `error`, sem construir response HTTP, definir status ou serializar.
+- `api/app/validation/validation.go`: registrar a regra customizada para oito dígitos ASCII; as tags `validate` ficam no DTO de path em `core/domain/requests`.
 - `api/app/handler`: mapear erros de validação, não encontrado, dependência externa e falha interna para status/payload correspondentes.
 
 #### Infra e composição
@@ -151,11 +153,11 @@ Os caminhos abaixo são uma proposta para implementação futura; não indicam a
 - Registrar metadados OpenAPI de summary, description, tags, parâmetros de path e resposta de sucesso. Documentar separadamente os erros, pois o registry atual não registra automaticamente o schema de erros (ADR-007).
 
 ### Fluxo esperado
-1. O adapter recebe `GET /cep/{cep}` e fornece o parâmetro de rota ao controller.
-2. O controller valida o formato antes de chamar `CepService.Find`.
-3. O serviço chama ViaCEP pelo contrato `ports.Client`, verifica status e payload e distingue endereço, CEP inexistente e falha externa.
-4. O controller retorna HTTP 200 com o endereço, HTTP 404 para CEP inexistente, HTTP 502 para falha da dependência e HTTP 500 para falha interna.
-5. O adapter serializa a response no formato comum.
+1. O adapter recebe `GET /cep/{cep}` e encaminha o parâmetro à rota tipada.
+2. A rota tipada converte o path para o DTO e valida as tags `validate` pelo `ports.Validator`; CEP malformado resulta em HTTP 400 sem chamar controller ou ViaCEP.
+3. O controller chama `CepService.Find`; o serviço consulta ViaCEP via `ports.Client` e retorna endereço ou erro tipado, sem construir response HTTP.
+4. O controller cria `responses.Response` com status 200, 404 ou 502 para resultados conhecidos; erros inesperados seguem para o handler e resultam em HTTP 500.
+5. O adapter serializa e escreve a response do controller ou a response de erro resolvida pelo handler. Controller e serviço não serializam nem escrevem HTTP/JSON.
 
 ### Testes e comparação
 Antes de usar o cenário em benchmark, cobrir:

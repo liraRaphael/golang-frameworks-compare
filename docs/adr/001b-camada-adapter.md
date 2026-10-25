@@ -16,17 +16,17 @@ Não existe um diretório `api/adapter` na implementação atual. A coordenaçã
 A camada `app` é responsável por:
 
 - controllers para entrada das requisições;
-- validação de dados de entrada;
+- implementação do validador de dados de entrada, executado pela rota tipada da infraestrutura;
 - apresentação de resultados em formatos adequados;
-- retorno de erros ao adapter de framework e integração com o handler padronizado; o handler atual aplica fallback 500 quando não há mapeamento;
+- retorno de resultados/erros aos adapters e integração com o handler padronizado;
 - integração com o handler padronizado da aplicação.
 
-Os adapters de `infra/frameworks/{beego,chi,echo,fiber,gin,nethttp}` fazem parsing do corpo e parâmetros HTTP, chamam controllers e escrevem responses. A interface `ports.FrameworkAdapter` declara `RegisterRoute`, `Use` e `Start`.
+Os adapters de `infra/frameworks/{beego,chi,echo,fiber,gin,nethttp}` fazem parsing do corpo e parâmetros HTTP, verificam content type JSON quando há body e escrevem responses. A rota tipada converte e valida o DTO antes de chamar o controller. Controllers definem o status e retornam `responses.Response` tipada; os adapters serializam e escrevem a response HTTP. A interface `ports.FrameworkAdapter` declara `RegisterRoute`, `Use` e `Start`.
 
 ### Estrutura sugerida
 - `app/controller`: controllers que recebem as chamadas da API.
-  - Recebe `ports.Context` e `requests.Request[...]`.
-- `app/handler`: resolução de respostas de sucesso e erro.
+  - Recebe `ports.Context` e `requests.Request[...]`, executa a orquestração e monta a response tipada, incluindo status code.
+- `app/handler`: resolução padronizada de erros; em sucesso, o controller cria a response tipada.
 - `app/validation`: implementação `PlaygroundValidator`, baseada em `go-playground/validator`.
 - `app/presenter`: transformação de resultado em resposta.
 - `infra/frameworks/<nome>`: integração de entrada/saída específica de cada framework.

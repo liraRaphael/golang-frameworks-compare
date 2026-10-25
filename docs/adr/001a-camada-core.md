@@ -16,16 +16,17 @@ A camada `core` precisa ser bem definida para manter as regras de negócio isola
 A camada `core` será organizada em subpacotes com responsabilidades claras:
 
 - `domain`: tipos HTTP, requests, responses, enums e erros; atualmente não há pacote `domain/entities`.
-- `usecases`: implementação do caso de uso `HelloUseCase`.
+- `usecases`: casos de uso, que recebem requests do domínio e retornam o corpo tipado da resposta e um erro, sem construir `responses.Response` nem definir status HTTP.
 - `ports`: contratos de controller, handler, middleware, presenter, validator, cliente, contexto, router e adapters de framework.
 
 ### Regras
 - A implementação atual não está totalmente isolada de `infra`: `ports.Context` referencia `infra/observability/logger` e OpenTelemetry; `ports.Router` referencia `infra/docs/swagger`.
-- `HelloUseCase.Execute` recebe `ports.Context` e um tipo de request de domínio; não depende diretamente de um framework web.
+- Use cases implementam regras da aplicação sem depender diretamente de um framework web; não serializam HTTP/JSON nem escolhem status HTTP.
+- `CurrencyConversionRequest` concentra as operações puras específicas do request de conversão (`CurrencyRate` e `CurrencyQuote`); `CurrencyQuote` calcula o valor convertido e arredondado, enquanto `CurrencyRate` fornece o multiplicador da resposta.
 - Interfaces devem ser pequenas, específicas e fáceis de mockar.
 
 ### Implementação presente
-O use case de Hello delega a produção da saída à porta `HelloPresenter`. Os tipos `HelloRequest`, `HelloOutput`, `ErrorResponse`, `ClientError` e `FieldValidationError` vivem nos pacotes existentes de `core/domain`. Não há conversor de moeda implementado em `core`.
+O use case de Hello delega a produção da saída à porta `HelloPresenter`. O conversor de moedas retorna `ConvertCurrencyResponse` como corpo tipado e erro; o controller o envolve em `responses.Response` e escolhe o status HTTP. Os tipos `HelloRequest`, `HelloOutput`, `ErrorResponse`, `ClientError` e `FieldValidationError` vivem nos pacotes existentes de `core/domain`.
 
 ## Consequências
 - A lógica de negócio fica centralizada e reutilizável.

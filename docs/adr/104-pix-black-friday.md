@@ -85,11 +85,13 @@ Inserir a transação em estado `pending` e seu registro de outbox na mesma tran
 
 ### Contrato HTTP
 - `POST /pix-transactions` recebe JSON com `pix_key` e `amount`, além do header obrigatório `Idempotency-Key`.
+- O DTO de body e o DTO de headers declaram campos obrigatórios e restrições estruturais em tags `validate`; a rota tipada converte os dados e executa `ports.Validator` antes do controller. `pix_key` deve ter formato sintético EVP UUID; `amount` deve ser numérico, finito, maior que zero, limitado a duas casas decimais e dentro do limite definido. Tags padrão devem ser usadas quando suficientes e regras adicionais registradas em `api/app/validation/validation.go`.
+- O header `Idempotency-Key` deve ser obrigatório e não vazio, sendo validado antes do controller. Formato estrutural inválido retorna HTTP 400 sem criar trabalho.
 - Repetir a mesma chave de idempotência com o mesmo payload deve devolver a transação já criada, sem criar novo trabalho; a unicidade é persistida no banco. Reutilizar a chave com payload diferente retorna HTTP 409. Em corridas concorrentes pela mesma chave, tratar a violação da constraint consultando a transação vencedora e comparando o payload antes de responder.
-- `pix_key` deve ser uma das chaves sintéticas ativas carregadas como fixture; rejeitar chaves inválidas ou desconhecidas antes de admitir trabalho. Não consultar DICT nem validar titularidade real.
-- `amount` deve ser numérico, finito e maior que zero, com no máximo duas casas decimais e dentro do limite do schema.
+- `pix_key` deve ser uma das chaves sintéticas ativas carregadas como fixture; rejeitar chaves válidas em formato, porém desconhecidas/inativas, antes de admitir trabalho. Essa verificação depende das fixtures persistidas e pertence ao serviço, não ao validador estrutural. Não consultar DICT nem validar titularidade real.
 - JSON malformado ou valor inválido retorna HTTP 400. Chave bem formada mas ausente/inativa retorna HTTP 422. Esses casos não criam transação nem outbox.
 - Em sucesso de admissão, persistir `pending` e outbox e retornar HTTP 202 com `id`, `status` e `created_at`. HTTP 202 significa aceito para processamento, não pagamento concluído.
+- O use case/serviço retorna somente resultado tipado e `error`; não cria `responses.Response`, define status HTTP ou serializa JSON. O controller traduz resultados de negócio conhecidos (admissão 202, conflito de idempotência 409, chave inativa 422, capacidade esgotada 503 e consulta inexistente 404) em `responses.Response` com status; falhas de validação estrutural e erros técnicos são encaminhados ao handler conforme seus mapeamentos. O adapter serializa e escreve a response, sem lógica de status no caso de sucesso.
 - Quando a capacidade de processamento estiver esgotada, retornar HTTP 503 sem criar transação. Falhas na persistência antes da confirmação retornam erro explícito e não devem produzir resposta de aceitação.
 - `GET /pix-transactions/{id}` retorna HTTP 200 com `id`, `pix_key` mascarada, `amount`, `status` e timestamps pertinentes; retorna HTTP 404 se a transação não existir. Não incluir dados sensíveis ou falhas internas detalhadas.
 - Erros inesperados retornam HTTP 500 sem expor detalhes internos. Registrar mapeamentos explícitos para erros de entrada, chave ausente, fila saturada e falha interna; não depender do fallback HTTP 500 do handler atual (ADR-003).
@@ -97,18 +99,21 @@ Inserir a transação em estado `pending` e seu registro de outbox na mesma tran
 ### Organização na aplicação
 Os diretórios listados são propostas para implementação futura, não arquivos já presentes:
 
-- `api/core/domain/requests/pix.go`: tipo de entrada e tags de contrato/schema.
+- `api/core/domain/requests/pix.go`: DTOs de body e parâmetros HTTP com tags JSON e `validate` para campos/restrições estruturais.
 - `api/core/domain/responses/pix.go`: resposta de admissão e consulta, com estados permitidos.
 - `api/core/ports/service.go`: interfaces consumidas pelos controllers para submissão e consulta.
 - `api/core/ports`: contratos pequenos para persistência e cliente do provedor, sem tipos de framework ou SQL concreto.
-- `api/app/controller/pix.go`: extrair/bindar request, validar e chamar o serviço; mapear resultados para HTTP 202, 400, 404, 422, 503 ou 500.
-- `api/app/service/pix.go`: orquestrar validação de negócio, admissão transacional, leitura do status e ciclo de vida do worker/dispatcher conforme os contratos.
+- `api/infra/router` e `api/app/validation`: converter body/headers e executar as tags `validate` e regras customizadas registradas em `validation.go`, antes do controller.
+- `api/app/controller/pix.go`: chamar o serviço e criar `responses.Response` com status apropriado para resultados de negócio conhecidos; não validar DTOs nem serializar/escrever HTTP. Erros de validação estrutural e falhas técnicas são resolvidos pelo handler por mapeamentos explícitos.
+- `api/app/service/pix.go`: orquestrar validações dependentes de estado, admissão transacional, leitura do status e ciclo de vida do worker/dispatcher conforme os contratos; retornar corpo tipado e `error`, sem construir response HTTP nem escolher status.
 - `api/infra/database`: implementar repositório PostgreSQL, transações e persistência do outbox.
 - `api/infra/clients`: implementar o client HTTP do provedor mock usando o contrato `ports.Client` e timeout finito.
 - `api/infra/workers` (ou pacote de infraestrutura equivalente): executar dispatcher, fila e workers, sem colocar lógica em adapters de framework.
 - `api/main.go`: compor manualmente pool SQL, repositório, client, serviço, workers e controller por construtores, seguindo ADR-010. Acrescentar configuração de URL/timeout do provedor e de número de workers/capacidade da fila; o `AppConfig` atual não as declara. Como a configuração existente processa o prefixo `APP_`, alinhar o Compose para definir `APP_WIREMOCK_URL` ou declarar explicitamente outro prefixo; hoje o Compose define `WIREMOCK_URL`, que não será carregado automaticamente pelo `envconfig.Process("APP", ...)`.
 
 O controller não deve acessar o banco, chamar WireMock nem criar uma goroutine por request diretamente. A API deve ter um ciclo de vida do worker gerido pelo bootstrap; não iniciar workers novos a cada chamada HTTP.
+
+Validação estrutural de DTO (presença, formato e limites representáveis por tags/regras de campo) acontece uma única vez na rota tipada antes do controller. Verificações de idempotência, existência de chave ativa, capacidade, transições e estado da transação são regras de negócio/persistência do serviço e não devem ser movidas para o controller nem confundidas com validação de campos.
 
 ### Goroutines, fila e consistência
 - Executar um número configurável e fixo de goroutines workers, cada uma consumindo identificadores de transação de um channel limitado. Usar o mesmo número de workers e capacidade em todos os frameworks comparados.
@@ -147,9 +152,7 @@ O worker chama `POST /pix-provider/transfers` com `transaction_id`, chave sinté
     },
     "headers": { "Content-Type": "application/json" },
     "delayDistribution": {
-      "type": "uniform",
-      "lower": 100,
-      "upper": 120
+      "type": "uniform"
     }
   }
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
+	domainerrors "github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -60,9 +61,14 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 		})
 
 		var body any
-		if c.Request.ContentLength > 0 {
+		if frameworks.HasBody(c.Request) {
+			if err := frameworks.ValidateJSONContentType(c.Request.Header.Values("Content-Type")...); err != nil {
+				resp := a.handle.ResolveError(ctx, domainerrors.NewRequestError(err))
+				a.writeResponse(ctx, c, resp)
+				return
+			}
 			if err := c.ShouldBindJSON(&body); err != nil && err != io.EOF {
-				resp := a.handle.ResolveError(ctx, err)
+				resp := a.handle.ResolveError(ctx, domainerrors.NewRequestError(err))
 				a.writeResponse(ctx, c, resp)
 				return
 			}

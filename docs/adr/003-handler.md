@@ -22,8 +22,9 @@ A implementação inicial utilizará a biblioteca padrão `encoding/json` para s
 - `Handle` recebe `ports.Context`, status de sucesso, saída e headers/cookies.
 - O `ports.Context` é a abstração de borda do domínio e compõe o `context.Context` do Go, permitindo que adaptadores de framework convertam o contexto nativo da requisição em um contrato neutro para a camada de portas.
 - Se `result` for um `error`, o handler identificará o tipo e/ou mensagem do erro e aplicará a estratégia adequada de mapeamento.
-- Se `result` não for um erro, o handler interpretará como sucesso e retornará o payload de resposta já preparado pelo caso de uso ou presenter.
-- Os adapters de framework usam `ResolveError` quando parsing ou controller retornam erro. Os controllers atuais devolvem `responses.Response` diretamente em caso de sucesso; `Handle` existe no contrato, mas não é usado nesse fluxo.
+- Em caso de sucesso, os controllers criam `responses.Response` com payload, status, headers e cookies; o fluxo atual não passa esse resultado por `Handle`.
+- Os adapters de framework usam `ResolveError` quando parsing, binding, validação ou execução do controller retorna erro. O handler mapeia erros e os adapters serializam/escrevem as responses resultantes.
+- O controller define o status de sucesso e cria a response tipada. O adapter preserva essa response e serializa/escreve o envelope HTTP.
 
 ### Resposta padrão
 `core/domain/responses.ErrorResponse` define o payload de erro:
@@ -49,7 +50,7 @@ type ErrorResponseFuncType func(ctx ports.Context, err error) responses.Response
 
 - O handler consulta primeiro a mensagem exata e depois o tipo concreto (`reflect.Type`).
 - Sem correspondência, devolve status 500, código `internal_error` e mensagem `Erro interno do servidor não mapeado`.
-- `main.go` não registra mapeamentos. Erros de parsing/validação/controller resultam, portanto, no fallback 500 neste handler.
+- O handler registra `RequestError` como HTTP 400 e `FieldValidationError` como HTTP 400. Outros erros sem mapeamento explícito usam o fallback HTTP 500.
 
 ### Interface do handler
 ```go
@@ -68,7 +69,7 @@ A interface está definida em `core/ports`. O contrato permanece independente do
 
 ### Integração com o framework
 - O handler não deve conhecer diretamente o framework escolhido.
-- Ele deverá retornar uma estrutura de resposta pronta para o framework serializar.
+- A response retornada pelo controller contém o envelope padronizado que o adapter do framework serializa e escreve.
 - O framework, por sua vez, será responsável por escrever a resposta ao cliente com o status e o body corretos.
 
 ## Consequências

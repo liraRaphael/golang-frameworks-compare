@@ -14,6 +14,10 @@ type (
 		Controller[requests.HelloRequest, any, responses.HelloOutput, any]
 	}
 
+	CurrencyController interface {
+		Controller[requests.CurrencyConversionRequest, any, responses.ConvertCurrencyResponse, any]
+	}
+
 	HealthController interface {
 		Controller[any, any, any, any]
 	}

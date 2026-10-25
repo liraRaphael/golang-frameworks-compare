@@ -3,9 +3,11 @@ package fiber
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
+	domainerrors "github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -62,8 +64,18 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 
 		var body any
 		if len(c.Body()) > 0 {
+			contentTypes := make([]string, 0, 1)
+			c.Request().Header.VisitAll(func(key, value []byte) {
+				if strings.EqualFold(string(key), "Content-Type") {
+					contentTypes = append(contentTypes, string(value))
+				}
+			})
+			if err := frameworks.ValidateJSONContentType(contentTypes...); err != nil {
+				resp := a.handle.ResolveError(ctx, domainerrors.NewRequestError(err))
+				return a.writeResponse(ctx, c, resp)
+			}
 			if err := json.Unmarshal(c.Body(), &body); err != nil {
-				resp := a.handle.ResolveError(ctx, err)
+				resp := a.handle.ResolveError(ctx, domainerrors.NewRequestError(err))
 				return a.writeResponse(ctx, c, resp)
 			}
 		}

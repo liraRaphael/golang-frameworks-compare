@@ -2,11 +2,13 @@ package beego
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/beego/beego/v2/server/web"
 	bctx "github.com/beego/beego/v2/server/web/context"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
+	domainerrors "github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -60,9 +62,14 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 		})
 
 		var body any
-		if ctx.Request.ContentLength > 0 {
-			if err := json.NewDecoder(ctx.Request.Body).Decode(&body); err != nil {
-				resp := a.handle.ResolveError(rCtx, err)
+		if frameworks.HasBody(ctx.Request) {
+			if err := frameworks.ValidateJSONContentType(ctx.Request.Header.Values("Content-Type")...); err != nil {
+				resp := a.handle.ResolveError(rCtx, domainerrors.NewRequestError(err))
+				a.writeResponse(rCtx, ctx, resp)
+				return
+			}
+			if err := json.NewDecoder(ctx.Request.Body).Decode(&body); err != nil && err != io.EOF {
+				resp := a.handle.ResolveError(rCtx, domainerrors.NewRequestError(err))
 				a.writeResponse(rCtx, ctx, resp)
 				return
 			}

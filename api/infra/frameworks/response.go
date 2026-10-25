@@ -2,7 +2,10 @@ package frameworks
 
 import (
 	"encoding/json"
+	"errors"
+	"mime"
 	"net/http"
+	"strings"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
@@ -10,6 +13,21 @@ import (
 
 func MarshalResponse(resp responses.Response[any, any]) ([]byte, error) {
 	return json.Marshal(resp)
+}
+
+func HasBody(r *http.Request) bool {
+	return r.Body != nil && r.Body != http.NoBody
+}
+
+func ValidateJSONContentType(values ...string) error {
+	if len(values) != 1 {
+		return errors.New("content type must be application/json")
+	}
+	mediaType, _, err := mime.ParseMediaType(values[0])
+	if err != nil || !strings.EqualFold(mediaType, "application/json") {
+		return errors.New("content type must be application/json")
+	}
+	return nil
 }
 
 func ParseCookies(cookieHeader string) domain.HttpParamsType {

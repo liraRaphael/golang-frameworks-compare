@@ -11,8 +11,12 @@ type PlaygroundValidator struct {
 }
 
 func NewPlaygroundValidator() ports.Validator {
+	validate := validator.New()
+	if err := registerValidationRules(validate); err != nil {
+		panic(err)
+	}
 	return &PlaygroundValidator{
-		validate: validator.New(),
+		validate: validate,
 	}
 }
 

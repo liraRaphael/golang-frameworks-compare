@@ -87,7 +87,9 @@ func main() {
 
 	helloPresenter := presenter.NewHelloPresenter()
 	helloWorldUsecase := usecases.NewHelloUseCase(helloPresenter)
-	helloWorldController := controller.NewHelloController(helloWorldUsecase, val)
+	helloWorldController := controller.NewHelloController(helloWorldUsecase)
+	currencyUseCase := usecases.NewCurrencyUseCase()
+	currencyController := controller.NewCurrencyController(currencyUseCase)
 
 	healthController := controller.NewHealthController()
 
@@ -122,12 +124,27 @@ func main() {
 		"GET",
 		"/hello",
 		helloWorldController,
+		val,
 		swagger.NewRouteMetadata().
 			WithSummary("Gera um cumprimento").
 			WithDescription("Retorna uma mensagem de hello baseada no nome fornecido").
 			WithTags("Greetings").
 			WithInput(new(requests.HelloRequest)).
 			WithOutput(new(responses.HelloOutput)),
+	)
+
+	router.AddTypedRoute(
+		stdRouter,
+		"POST",
+		"/currency/convert",
+		currencyController,
+		val,
+		swagger.NewRouteMetadata().
+			WithSummary("Converte valores entre USD e BRL").
+			WithDescription("Converte um valor entre USD e BRL usando uma cotação fixa e determinística").
+			WithTags("Currency").
+			WithInput(new(requests.CurrencyConversionRequest)).
+			WithOutput(new(responses.ConvertCurrencyResponse)),
 	)
 
 	swag.StartSwaggerUI(fmt.Sprintf(":%s", cfg.SwaggerPort))

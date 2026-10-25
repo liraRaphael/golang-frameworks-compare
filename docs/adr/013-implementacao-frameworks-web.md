@@ -34,13 +34,16 @@ Cada adapter implementa `ports.FrameworkAdapter`, declarado em [api/core/ports/p
 - encaminhamento de middlewares (a aplicação dos middlewares ainda é no-op ou middleware vazio nos adapters atuais);
 - inicialização do servidor em um endereço configurável;
 - adaptação do contexto nativo do framework para `ports.Context`;
-- serialização consistente de resposta e status code.
+- parsing/binding do request e validação do content type JSON quando há body;
+- serialização e escrita HTTP da response tipada produzida pelo controller.
 
 ### Padrão de integração
 As implementações seguem um padrão semelhante ao adapter net/http:
 - o núcleo da aplicação permanece inalterado;
 - os controllers e use cases continuam sendo consumidos via interfaces de porta;
 - o framework concreto atua apenas como adaptador de entrada/saída;
+- a rota tipada compartilhada valida o DTO convertido antes de invocar o controller;
+- o controller define o status e envolve o resultado do caso de uso em `responses.Response`; o adapter serializa e escreve essa response;
 - `StandardRouter` registra rotas e encaminha middlewares a cada adapter;
 - o request wrapper fornece body e mapas HTTP a controllers genéricos. Em `nethttp`, os parâmetros de path não são extraídos.
 
@@ -55,6 +58,7 @@ As implementações seguem um padrão semelhante ao adapter net/http:
 - O suporte a métodos HTTP varia: Beego tem casos explícitos para GET/POST/PUT/DELETE e usa `Any` nos demais; os outros registram o método fornecido ao framework, enquanto net/http valida o método dentro do handler.
 - `Use` não executa o middleware fornecido nos adapters existentes.
 - Os adapters diferem em extração de path params, binding, cookies e tratamento de falhas de escrita; portanto, o contrato comum não significa comportamento completamente equivalente.
+- Em rotas tipadas, o body é convertido e validado antes da chamada ao controller. O controller cria a response tipada e define o status, mas não serializa JSON nem escreve HTTP.
 
 ### Exemplo de referência baseado em net/http
 O adapter padrão do Go em [api/infra/frameworks/nethttp/adapter.go](../../api/infra/frameworks/nethttp/adapter.go) continua sendo uma opção selecionável em runtime e o fallback do bootstrap.

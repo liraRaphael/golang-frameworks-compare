@@ -43,6 +43,11 @@ type Response[BodyType any, ParamType any] interface {
 }
 ```
 
+### Responsabilidade de controller e use case
+O controller é responsável por definir o status HTTP e criar a response tipada `responses.Response[ResponseBody, ParamType]`. O use case retorna apenas o corpo tipado (`ResponseBody`) e `error`; não constrói `responses.Response`, não define status HTTP e não serializa JSON. O controller não serializa nem escreve HTTP.
+
+O adapter de framework recebe a response criada pelo controller, preserva status e headers e realiza a serialização/escrita HTTP. Para erros de parsing, validação ou execução, o fluxo comum resolve o erro e o adapter serializa/escreve a response de erro.
+
 ### HttpParamsType e HttpParam Type
 Parâmetros HTTP de entrada e saída são mapeados por `HttpParamsType`, que é um mapa de listas de strings, facilitando a manipulação segura de chaves com múltiplos valores:
 
@@ -72,6 +77,7 @@ Os construtores geram `Requester`/`Responser` e, quando fornecido um `ParamType`
 ### Regras
 - O `Request` e o `Response` permanecem em `core/domain` e não dependem de bibliotecas de terceiros ou frameworks.
 - Adapters de infraestrutura traduzem requisições HTTP para `Request[any, any]`; `AddTypedRoute` é a ponte disponível para controllers tipados.
+- Controllers definem status e envelope tipado; use cases retornam somente o corpo e erro; adapters são responsáveis por serializar e escrever a response.
 
 ## Consequências
 - Contratos genéricos estão disponíveis; as rotas existentes usam interfaces genéricas e a conversão tipada inclui serialização JSON intermediária.

@@ -2,10 +2,12 @@ package chi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
+	domainerrors "github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
@@ -58,9 +60,14 @@ func (a *adapter) RegisterRoute(method string, path string, ctrl ports.Controlle
 		})
 
 		var body any
-		if r.ContentLength > 0 {
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				resp := a.handle.ResolveError(ctx, err)
+		if frameworks.HasBody(r) {
+			if err := frameworks.ValidateJSONContentType(r.Header.Values("Content-Type")...); err != nil {
+				resp := a.handle.ResolveError(ctx, domainerrors.NewRequestError(err))
+				a.writeResponse(ctx, w, resp)
+				return
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil && err != io.EOF {
+				resp := a.handle.ResolveError(ctx, domainerrors.NewRequestError(err))
 				a.writeResponse(ctx, w, resp)
 				return
 			}

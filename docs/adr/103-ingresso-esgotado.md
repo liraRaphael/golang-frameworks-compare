@@ -31,12 +31,39 @@ Os resultados devem ser interpretados de acordo com o que realmente é medido: q
 
 ## Decisão
 
+O cenário de benchmark deve validar, em um mesmo fluxo de compra, três dimensões críticas: validação de entrada e autorização do comprador, sincronização segura de estoque em PostgreSQL e comportamento sob concorrência quando a dependência externa era simulada pelo WireMock. O objetivo não é modelar um sistema de vendas completo, mas medir com precisão como cada framework trata contenção, transações e dependências externas em um caso realista de "ingresso esgotado".
+
+### Objetivo e critério de sucesso
+- Cada request de compra deve refinar a mesma regra de negócio em todos os adapters: validar payload, verificar chave PIX de teste, consultar a elegibilidade por mock e persistir a venda apenas quando o ticket estiver disponível.
+- O benchmark deve produzir resultados úteis para comparar frameworks, e não apenas latência de um endpoint isolado. Portanto, as mesmas fixtures, banco, carga e delay do mock devem ser usados em todas as implementações.
+- O critério principal de sucesso é a invariância do estoque: o total de vendas confirmadas nunca pode exceder a quantidade inicial de ingressos, e cada ingresso deve ser atribuído a no máximo uma compra.
+- A API não deve expor detalhes internos do banco, nem depender de transações em memória para coordenar concorrência entre processos ou instâncias.
+
 ### Responsabilidades por camada
-- `api/app/controller`: validar o request, chamar o serviço de compra e traduzir o resultado para a response HTTP; não executar SQL nem chamar WireMock diretamente.
-- `api/app/service`: orquestrar a elegibilidade simulada e a compra; depender de contratos, não de PostgreSQL ou framework concretos.
+- `api/infra/router` e `api/app/validation`: converter e validar o DTO de entrada antes da execução do controller.
+- `api/app/controller`: receber o DTO já validado, chamar o serviço de compra, definir status code para resultados conhecidos e montar a `responses.Response` tipada; não validar DTOs de transporte, serializar HTTP/JSON, executar SQL nem chamar WireMock diretamente.
+- `api/app/service`: orquestrar a elegibilidade simulada e a compra; depender de contratos, não de PostgreSQL ou framework concretos. Retornar corpo tipado e `error`, sem construir `responses.Response`, definir status HTTP ou serializar.
 - `api/core/ports`: declarar os contratos necessários para a compra/persistência e para o serviço consumido pelo controller. Não há hoje uma porta de repositório implementada.
 - `api/infra`: implementar a persistência PostgreSQL e o client HTTP injetados manualmente por construtor em `api/main.go`, conforme ADR-010.
 - O contrato comum do adapter não garante equivalência completa de binding, path params ou escrita de respostas; validar o mesmo comportamento HTTP nos adapters conforme ADR-013.
+
+### DTO e validação de entrada
+- Os DTOs de request em `api/core/domain/requests` declaram as restrições estruturais em tags `validate`; a biblioteca e as regras customizadas são executadas por `ports.Validator` na rota tipada, antes do controller.
+- `ticket_id` deve ser obrigatório e positivo; `buyer_pix_key` deve ser obrigatório e obedecer ao formato sintético EVP UUID esperado. A validação de formato pode usar regra customizada em `api/app/validation/validation.go`.
+- A existência da chave PIX entre as fixtures, a disponibilidade do ingresso, elegibilidade, idempotência e capacidade da fila dependem de estado persistido ou contratos de serviço: são verificações de negócio/persistência, não substituem nem duplicam a validação estrutural.
+- `FieldValidationError` deve chegar ao mapeamento padronizado como HTTP 400; a validação deve ocorrer antes de qualquer chamada ao WireMock ou gravação. O controller não repete essas verificações.
+
+### Fluxo de request
+1. O adapter recebe `POST /ticket-purchases` e a rota tipada converte o body para o DTO.
+2. `ports.Validator` executa as tags `validate` e regras customizadas antes do controller; entrada estruturalmente inválida retorna HTTP 400 sem WireMock ou escrita.
+3. O controller chama o serviço, que verifica chave nas fixtures, elegibilidade e compra transacional, retornando corpo tipado e erro sem construir response HTTP.
+4. O controller cria `responses.Response` e define status para resultados de negócio conhecidos; `FieldValidationError` e falhas técnicas inesperadas seguem para os mapeamentos explícitos do handler.
+5. O adapter serializa e escreve a response do controller ou a response de erro. Controller e serviço não serializam nem escrevem HTTP/JSON.
+
+### Não objetivos
+- Não é um cenário de cobrança real, autenticação bancária, integração com DICT ou processamento financeiro oficial.
+- Não é um benchmark de throughput puro sem consistência: o objetivo inclui consistência do estado, não apenas maior volume de requisições concluídas.
+- Não deve usar mutex global para serializar a compra de todos os tickets, porque isso remove o ruído da contenção real e não representa a operação em produção ou em réplicas.
 
 ### Migration inicial e schema
 O schema e o seed determinístico serão criados em `db/init.sql`, tratado como a migration inicial do cenário. A migration cria as tabelas e restrições, insere o evento/estoque inicial e registra as 100 chaves PIX sintéticas conhecidas para os testes.
@@ -206,7 +233,8 @@ INSERT INTO pix_test_keys (fixture_number, pix_key) VALUES
 
 ### Contrato e compra
 - `POST /ticket-purchases` recebe `ticket_id` e `buyer_pix_key`.
-- Validar formato do payload e confirmar que `buyer_pix_key` pertence ao conjunto de teste. Não aceitar chaves arbitrárias ou fazer consulta ao DICT. Payload malformado retorna HTTP 400; uma chave com formato válido que não pertença às fixtures retorna HTTP 422, sem iniciar compra.
+- A rota tipada valida formato e campos obrigatórios pelas tags `validate` antes de chamar o controller. Payload ausente/malformado, `ticket_id` inválido ou chave com formato inválido retorna HTTP 400, sem chamada externa ou gravação.
+- O serviço confirma que `buyer_pix_key` pertence ao conjunto de teste. Não aceitar chaves desconhecidas nem fazer consulta ao DICT. Uma chave sintaticamente válida que não pertença às fixtures retorna HTTP 422, sem iniciar compra.
 - Para chamadas válidas, chamar o mock de elegibilidade antes de abrir a transação de compra. Essa chamada não movimenta dinheiro e não autoriza pagamento; ela existe para simular uma dependência com latência controlada.
 - Elegibilidade negada retorna HTTP 422 e não cria compra.
 - Em caso de elegibilidade aprovada, iniciar uma transação SQL, selecionar o ingresso com `SELECT ... FOR UPDATE`, confirmar que existe e está disponível, inserir a compra e marcar o ingresso como `sold`. Confirmar as alterações no mesmo commit; em erro, executar rollback e retornar erro explícito.

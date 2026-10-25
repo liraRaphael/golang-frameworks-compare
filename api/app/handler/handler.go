@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/liraraphael/go-framework-bench/api/core/domain"
+	domainerrors "github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
 )
@@ -15,10 +16,24 @@ type standardHandler struct {
 }
 
 func NewStandardHandler() ports.Handler {
-	return &standardHandler{
+	h := &standardHandler{
 		errorMessageHandlers: map[string]ports.ErrorResponseFuncType{},
 		errorTypeHandlers:    map[reflect.Type]ports.ErrorResponseFuncType{},
 	}
+	h.RegisterByType(&domainerrors.RequestError{}, func(_ ports.Context, _ error) responses.Response[any, any] {
+		body := responses.NewErrorResponse("invalid_request", "Requisição inválida")
+		return responses.NewResponse[any, any](body, nil, http.StatusBadRequest)
+	})
+	h.RegisterByType(&domainerrors.FieldValidationError{}, func(_ ports.Context, err error) responses.Response[any, any] {
+		body := responses.NewErrorResponse("validation_error", "Dados da requisição inválidos")
+		if validationErr, ok := err.(*domainerrors.FieldValidationError); ok {
+			for _, fieldErr := range validationErr.Errors {
+				body.WithDetails(fieldErr.Field, fieldErr.Tag, fieldErr.Value)
+			}
+		}
+		return responses.NewResponse[any, any](body, nil, http.StatusBadRequest)
+	})
+	return h
 }
 
 func (h *standardHandler) RegisterByMessage(message string, fn ports.ErrorResponseFuncType) {

@@ -127,8 +127,9 @@ func TestPlaygroundValidator_ValidatesCurrencyFields(t *testing.T) {
 	}
 }
 
+//go:fix inline
 func floatPointer(value float64) *float64 {
-	return &value
+	return new(value)
 }
 
 func TestPlaygroundValidator_Validate(t *testing.T) {

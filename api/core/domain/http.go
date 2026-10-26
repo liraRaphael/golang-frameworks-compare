@@ -324,7 +324,7 @@ func ExtractParamsFromTag(typ reflect.Type) (headersFields []int, queryFields []
 
 func PopulateParams[ParamType any](headers, queryParams, pathParams, cookies HttpParamsType) (ParamType, error) {
 	var params ParamType
-	typ := reflect.TypeOf((*ParamType)(nil)).Elem()
+	typ := reflect.TypeFor[ParamType]()
 
 	var structType reflect.Type
 	switch typ.Kind() {

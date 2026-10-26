@@ -18,6 +18,10 @@ type (
 		Controller[requests.CurrencyConversionRequest, any, responses.ConvertCurrencyResponse, any]
 	}
 
+	CEPController interface {
+		Controller[any, requests.CepPathRequest, responses.CepAddress, any]
+	}
+
 	HealthController interface {
 		Controller[any, any, any, any]
 	}

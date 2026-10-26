@@ -3,16 +3,20 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/liraraphael/go-framework-bench/api/app/controller"
 	"github.com/liraraphael/go-framework-bench/api/app/handler"
 	"github.com/liraraphael/go-framework-bench/api/app/presenter"
+	"github.com/liraraphael/go-framework-bench/api/app/service"
 	"github.com/liraraphael/go-framework-bench/api/app/validation"
+	domainerrors "github.com/liraraphael/go-framework-bench/api/core/domain/errors"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/responses"
 	"github.com/liraraphael/go-framework-bench/api/core/ports"
 	"github.com/liraraphael/go-framework-bench/api/core/usecases"
+	clienthttp "github.com/liraraphael/go-framework-bench/api/infra/clients/nethttp"
 	"github.com/liraraphael/go-framework-bench/api/infra/config"
 	"github.com/liraraphael/go-framework-bench/api/infra/diagnostic"
 	"github.com/liraraphael/go-framework-bench/api/infra/docs/swagger"
@@ -83,6 +87,15 @@ func main() {
 	diagnostic.StartPprof(fmt.Sprintf(":%s", cfg.PprofPort))
 
 	hl := handler.NewStandardHandler()
+	hl.RegisterByType(&domainerrors.CEPInvalidError{}, func(_ ports.Context, err error) responses.Response[any, any] {
+		return responses.NewResponse[any, any](responses.NewErrorResponse("invalid_cep", "CEP inválido"), nil, http.StatusBadRequest)
+	})
+	hl.RegisterByType(&domainerrors.CEPNotFoundError{}, func(_ ports.Context, err error) responses.Response[any, any] {
+		return responses.NewResponse[any, any](responses.NewErrorResponse("cep_not_found", "CEP não encontrado"), nil, http.StatusNotFound)
+	})
+	hl.RegisterByType(&domainerrors.CEPUpstreamError{}, func(_ ports.Context, err error) responses.Response[any, any] {
+		return responses.NewResponse[any, any](responses.NewErrorResponse("upstream_error", "Falha ao consultar o serviço de CEP"), nil, http.StatusBadGateway)
+	})
 	val := validation.NewPlaygroundValidator()
 
 	helloPresenter := presenter.NewHelloPresenter()
@@ -90,6 +103,9 @@ func main() {
 	helloWorldController := controller.NewHelloController(helloWorldUsecase)
 	currencyUseCase := usecases.NewCurrencyUseCase()
 	currencyController := controller.NewCurrencyController(currencyUseCase)
+	cepClient := clienthttp.NewHttpClient(5 * time.Second)
+	cepService := service.NewCEPService(cepClient)
+	cepController := controller.NewCEPController(cepService)
 
 	healthController := controller.NewHealthController()
 
@@ -145,6 +161,27 @@ func main() {
 			WithTags("Currency").
 			WithInput(new(requests.CurrencyConversionRequest)).
 			WithOutput(new(responses.ConvertCurrencyResponse)),
+	)
+
+	router.AddTypedRoute(
+		stdRouter,
+		"GET",
+		"/cep/{cep}",
+		cepController,
+		val,
+		swagger.NewRouteMetadata().
+			WithSummary("Busca endereço por CEP").
+			WithDescription("Consulta um CEP válido no serviço ViaCEP e retorna o endereço correspondente").
+			WithTags("CEP").
+			WithInput(new(requests.CepPathRequest)).
+			WithOutput(new(responses.CepAddress)).
+			WithParam(requests.Param[string]{
+				Name:        "cep",
+				In:          "path",
+				Required:    true,
+				Description: "CEP com 8 dígitos numéricos",
+				Value:       "01001000",
+			}),
 	)
 
 	swag.StartSwaggerUI(fmt.Sprintf(":%s", cfg.SwaggerPort))

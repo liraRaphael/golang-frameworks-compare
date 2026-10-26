@@ -43,6 +43,10 @@ type Response[BodyType any, ParamType any] interface {
 }
 ```
 
+O tipo genérico de `Response` garante a tipagem do corpo no contrato que a constrói; ele não converte automaticamente um body recebido como `any` por `ports.Client`. A conversão do payload externo para o tipo esperado deve ser explícita, validável e retornar erro, preservando os metadados da resposta. Não usar uma type assertion sem verificação como mecanismo de conversão.
+
+No Go 1.27, métodos genéricos podem ser declarados em tipos concretos, mas métodos de interface continuam sem poder declarar parâmetros de tipo. Portanto, uma operação genérica de conversão que trabalhe sobre `ports.Client` deve ser uma função genérica de pacote ou usar outro contrato compatível; não declarar `Do[T]` na interface `Client`. A decisão sobre o contrato do cliente está detalhada na [ADR-002](002-cliente.md).
+
 ### Responsabilidade de controller e use case
 O controller é responsável por definir o status HTTP e criar a response tipada `responses.Response[ResponseBody, ParamType]`. O use case retorna apenas o corpo tipado (`ResponseBody`) e `error`; não constrói `responses.Response`, não define status HTTP e não serializa JSON. O controller não serializa nem escreve HTTP.
 
@@ -78,6 +82,7 @@ Os construtores geram `Requester`/`Responser` e, quando fornecido um `ParamType`
 - O `Request` e o `Response` permanecem em `core/domain` e não dependem de bibliotecas de terceiros ou frameworks.
 - Adapters de infraestrutura traduzem requisições HTTP para `Request[any, any]`; `AddTypedRoute` é a ponte disponível para controllers tipados.
 - Controllers definem status e envelope tipado; use cases retornam somente o corpo e erro; adapters são responsáveis por serializar e escrever a response.
+- Ao consumir uma resposta de cliente externo com corpo `any`, a camada que interpreta o payload deve convertê-lo para o tipo de domínio de forma explícita e propagando erros; `Response[T, ParamType]` não faz essa conversão por si só.
 
 ## Consequências
 - Contratos genéricos estão disponíveis; as rotas existentes usam interfaces genéricas e a conversão tipada inclui serialização JSON intermediária.

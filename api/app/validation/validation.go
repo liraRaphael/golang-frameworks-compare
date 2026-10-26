@@ -3,10 +3,13 @@ package validation
 import (
 	"math"
 	"reflect"
+	"regexp"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/liraraphael/go-framework-bench/api/core/domain/requests"
 )
+
+var cepValidatorPattern = regexp.MustCompile(`^[0-9]{8}$`)
 
 func registerValidationRules(validate *validator.Validate) error {
 	if err := validate.RegisterValidation("finite", func(field validator.FieldLevel) bool {
@@ -15,6 +18,19 @@ func registerValidationRules(validate *validator.Validate) error {
 			return false
 		}
 		return !math.IsNaN(value.Float()) && !math.IsInf(value.Float(), 0)
+	}); err != nil {
+		return err
+	}
+
+	if err := validate.RegisterValidation("cep", func(field validator.FieldLevel) bool {
+		if field.Field().Kind() != reflect.String {
+			return false
+		}
+		value := field.Field().String()
+		if value == "" {
+			return false
+		}
+		return cepValidatorPattern.MatchString(value)
 	}); err != nil {
 		return err
 	}
